@@ -927,49 +927,90 @@ export const labAttachments = pgTable("lab_attachments", {
 });
 
 // =========================================================================
-// RADIOLOGY MODULE TABLES
+// RADIOLOGY / PACS MODULE
 // =========================================================================
+
+export const radiologyProcedures = pgTable("radiology_procedures", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  modality: varchar("modality", { length: 50 }).notNull(), // X-Ray, MRI, CT, Ultrasound
+  bodyPart: varchar("body_part", { length: 100 }).notNull(),
+  requiresContrast: boolean("requires_contrast").default(false).notNull(),
+  preparationInstructions: text("preparation_instructions"),
+  priceCents: integer("price_cents").default(0).notNull(),
+  durationMinutes: integer("duration_minutes").default(30).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
 export const radiologyOrders = pgTable("radiology_orders", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  branchId: uuid("branch_id").notNull().references(() => clinicBranches.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").notNull().references(() => clinicBranches.id),
   patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
-  doctorId: uuid("doctor_id").notNull().references(() => staffProfiles.id, { onDelete: "cascade" }),
+  orderingDoctorId: uuid("ordering_doctor_id").notNull().references(() => staffProfiles.id),
   encounterId: uuid("encounter_id").references(() => emrEncounters.id, { onDelete: "set null" }),
+  procedureId: uuid("procedure_id").notNull().references(() => radiologyProcedures.id),
   orderNumber: varchar("order_number", { length: 100 }).notNull().unique(),
-  modality: varchar("modality", { length: 50 }).notNull(), // X-Ray, MRI, CT, Ultrasound
-  bodyPart: varchar("body_part", { length: 150 }).notNull(),
+  accessionNumber: varchar("accession_number", { length: 100 }).notNull().unique(),
   clinicalIndication: text("clinical_indication").notNull(),
   priority: varchar("priority", { length: 50 }).default("Routine").notNull(),
-  status: varchar("status", { length: 50 }).default("Ordered").notNull(), // Ordered, ImageUploaded, Reported, DoctorReviewed
-  radiologistUserId: uuid("radiologist_user_id").references(() => users.id, { onDelete: "set null" }),
-  radiologistReport: text("radiologist_report"),
-  impression: text("impression"),
-  doctorReviewNotes: text("doctor_review_notes"),
-  doctorReviewedAt: timestamp("doctor_reviewed_at"),
-  comparisonStudyOrderId: uuid("comparison_study_order_id"),
-  dicomStudyUid: varchar("dicom_study_uid", { length: 255 }),
-  viewerUrl: varchar("viewer_url", { length: 1024 }),
-  reportPdfUrl: varchar("report_pdf_url", { length: 1024 }),
-  historySnapshot: jsonb("history_snapshot").default([]).notNull(),
+  status: varchar("status", { length: 50 }).default("Ordered").notNull(),
+  scheduledAt: timestamp("scheduled_at"),
+  contrastRequested: boolean("contrast_requested").default(false).notNull(),
+  pregnancyScreening: varchar("pregnancy_screening", { length: 100 }),
+  orderedAt: timestamp("ordered_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"),
 });
 
-export const radiologyImages = pgTable("radiology_images", {
+export const radiologyDicomStudies = pgTable("radiology_dicom_studies", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   radiologyOrderId: uuid("radiology_order_id").notNull().references(() => radiologyOrders.id, { onDelete: "cascade" }),
-  fileName: varchar("file_name", { length: 512 }).notNull(),
-  fileUrl: varchar("file_url", { length: 1024 }).notNull(),
-  mimeType: varchar("mime_type", { length: 100 }).default("application/dicom").notNull(),
-  fileSizeBytes: bigint("file_size_bytes", { mode: "number" }).notNull(),
-  imageType: varchar("image_type", { length: 50 }).default("DICOM").notNull(),
-  seriesUid: varchar("series_uid", { length: 255 }),
+  studyInstanceUid: varchar("study_instance_uid", { length: 255 }).notNull().unique(),
+  seriesInstanceUid: varchar("series_instance_uid", { length: 255 }).notNull(),
+  sopClassUid: varchar("sop_class_uid", { length: 255 }),
+  modality: varchar("modality", { length: 50 }).notNull(),
+  seriesDescription: varchar("series_description", { length: 255 }),
+  bodyPart: varchar("body_part", { length: 100 }),
+  instanceCount: integer("instance_count").default(1).notNull(),
+  storageUrl: varchar("storage_url", { length: 1024 }).notNull(),
+  thumbnailUrl: varchar("thumbnail_url", { length: 1024 }),
+  transferSyntax: varchar("transfer_syntax", { length: 255 }).default("1.2.840.10008.1.2.1"),
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"),
+});
+
+export const radiologyReports = pgTable("radiology_reports", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  radiologyOrderId: uuid("radiology_order_id").notNull().references(() => radiologyOrders.id, { onDelete: "cascade" }),
+  radiologistId: uuid("radiologist_id").notNull().references(() => staffProfiles.id),
+  findings: text("findings").notNull(),
+  impression: text("impression").notNull(),
+  recommendations: text("recommendations"),
+  status: varchar("status", { length: 50 }).default("Preliminary").notNull(),
+  radiologistSignature: text("radiologist_signature"),
+  reportedAt: timestamp("reported_at").defaultNow().notNull(),
+  reviewedByDoctorId: uuid("reviewed_by_doctor_id").references(() => staffProfiles.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at"),
+  doctorReviewNotes: text("doctor_review_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const radiologyComparisons = pgTable("radiology_comparisons", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  currentOrderId: uuid("current_order_id").notNull().references(() => radiologyOrders.id, { onDelete: "cascade" }),
+  priorOrderId: uuid("prior_order_id").notNull().references(() => radiologyOrders.id, { onDelete: "cascade" }),
+  comparisonNotes: text("comparison_notes").notNull(),
+  createdByStaffId: uuid("created_by_staff_id").notNull().references(() => staffProfiles.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const radiologyAttachments = pgTable("radiology_attachments", {
@@ -978,78 +1019,177 @@ export const radiologyAttachments = pgTable("radiology_attachments", {
   radiologyOrderId: uuid("radiology_order_id").notNull().references(() => radiologyOrders.id, { onDelete: "cascade" }),
   fileName: varchar("file_name", { length: 512 }).notNull(),
   fileUrl: varchar("file_url", { length: 1024 }).notNull(),
-  category: varchar("category", { length: 100 }).default("Report Attachment").notNull(),
-  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+  mimeType: varchar("mime_type", { length: 100 }).notNull(),
+  category: varchar("category", { length: 100 }).default("Supporting Document").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
 });
 
 // =========================================================================
-// INSURANCE MODULE TABLES
+// INSURANCE / REVENUE CYCLE MODULE
 // =========================================================================
 
 export const insuranceCompanies = pgTable("insurance_companies", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  payerCode: varchar("payer_code", { length: 50 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  payerCode: varchar("payer_code", { length: 100 }).notNull(),
-  contactEmail: varchar("contact_email", { length: 255 }),
-  contactPhone: varchar("contact_phone", { length: 50 }),
-  billingRules: jsonb("billing_rules").default({}).notNull(),
+  companyType: varchar("company_type", { length: 100 }).default("Commercial").notNull(),
+  phone: varchar("phone", { length: 50 }),
+  email: varchar("email", { length: 255 }),
+  claimsEndpoint: varchar("claims_endpoint", { length: 1024 }),
+  electronicPayerId: varchar("electronic_payer_id", { length: 100 }),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"),
 });
 
-export const insurancePolicies = pgTable("insurance_policies", {
+export const insurancePlans = pgTable("insurance_plans", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  insuranceCompanyId: uuid("insurance_company_id").notNull().references(() => insuranceCompanies.id, { onDelete: "cascade" }),
+  planCode: varchar("plan_code", { length: 100 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  networkTier: varchar("network_tier", { length: 100 }).notNull(),
+  defaultCoveragePercent: doublePrecision("default_coverage_percent").default(80).notNull(),
+  defaultCoPaymentCents: integer("default_co_payment_cents").default(0).notNull(),
+  annualDeductibleCents: integer("annual_deductible_cents").default(0).notNull(),
+  annualLimitCents: integer("annual_limit_cents").default(0).notNull(),
+  coverageRules: jsonb("coverage_rules").default({}).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const patientInsurancePolicies = pgTable("patient_insurance_policies", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
-  companyId: uuid("company_id").notNull().references(() => insuranceCompanies.id, { onDelete: "cascade" }),
+  insuranceCompanyId: uuid("insurance_company_id").notNull().references(() => insuranceCompanies.id),
+  insurancePlanId: uuid("insurance_plan_id").notNull().references(() => insurancePlans.id),
   policyNumber: varchar("policy_number", { length: 100 }).notNull(),
   memberId: varchar("member_id", { length: 100 }).notNull(),
-  planName: varchar("plan_name", { length: 255 }).notNull(),
-  coverage: jsonb("coverage").default({}).notNull(),
-  coPaymentPercent: doublePrecision("co_payment_percent").default(20).notNull(),
-  deductibleCents: integer("deductible_cents").default(0).notNull(),
-  validFrom: timestamp("valid_from").notNull(),
-  validTo: timestamp("valid_to").notNull(),
-  isPrimary: boolean("is_primary").default(true).notNull(),
+  groupNumber: varchar("group_number", { length: 100 }),
+  holderName: varchar("holder_name", { length: 255 }).notNull(),
+  relationshipToHolder: varchar("relationship_to_holder", { length: 100 }).default("Self").notNull(),
+  coverageStart: timestamp("coverage_start").notNull(),
+  coverageEnd: timestamp("coverage_end").notNull(),
+  coPaymentCents: integer("co_payment_cents").default(0).notNull(),
+  status: varchar("status", { length: 50 }).default("Active").notNull(),
+  eligibilityVerifiedAt: timestamp("eligibility_verified_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"),
 });
 
-export const insuranceApprovalRequests = pgTable("insurance_approval_requests", {
+export const insuranceBillingRules = pgTable("insurance_billing_rules", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  policyId: uuid("policy_id").notNull().references(() => insurancePolicies.id, { onDelete: "cascade" }),
+  insurancePlanId: uuid("insurance_plan_id").notNull().references(() => insurancePlans.id, { onDelete: "cascade" }),
+  ruleName: varchar("rule_name", { length: 255 }).notNull(),
+  serviceCategory: varchar("service_category", { length: 100 }).notNull(),
+  procedureCodePattern: varchar("procedure_code_pattern", { length: 255 }),
+  requiresAuthorization: boolean("requires_authorization").default(false).notNull(),
+  coveragePercent: doublePrecision("coverage_percent").notNull(),
+  maxCoveredAmountCents: integer("max_covered_amount_cents"),
+  patientCoPaymentCents: integer("patient_co_payment_cents").default(0).notNull(),
+  conditions: jsonb("conditions").default({}).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const insuranceAuthorizations = pgTable("insurance_authorizations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  patientPolicyId: uuid("patient_policy_id").notNull().references(() => patientInsurancePolicies.id),
   patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
-  requestedService: varchar("requested_service", { length: 255 }).notNull(),
-  authorizationNumber: varchar("authorization_number", { length: 100 }),
+  encounterId: uuid("encounter_id").references(() => emrEncounters.id, { onDelete: "set null" }),
+  authorizationNumber: varchar("authorization_number", { length: 100 }).notNull().unique(),
+  serviceType: varchar("service_type", { length: 255 }).notNull(),
+  diagnosisCodes: jsonb("diagnosis_codes").default([]).notNull(),
   requestedAmountCents: integer("requested_amount_cents").notNull(),
-  approvedAmountCents: integer("approved_amount_cents").default(0).notNull(),
-  status: varchar("status", { length: 50 }).default("Pending").notNull(), // Pending, Authorized, Rejected, Expired
-  notes: text("notes"),
-  requestedAt: timestamp("requested_at").defaultNow().notNull(),
-  decidedAt: timestamp("decided_at"),
+  approvedAmountCents: integer("approved_amount_cents"),
+  status: varchar("status", { length: 50 }).default("Pending").notNull(),
+  externalReference: varchar("external_reference", { length: 255 }),
+  rejectionReason: text("rejection_reason"),
+  submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+  decisionAt: timestamp("decision_at"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const insuranceClaims = pgTable("insurance_claims", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
-  branchId: uuid("branch_id").notNull().references(() => clinicBranches.id, { onDelete: "cascade" }),
+  patientPolicyId: uuid("patient_policy_id").notNull().references(() => patientInsurancePolicies.id),
   patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
-  policyId: uuid("policy_id").notNull().references(() => insurancePolicies.id, { onDelete: "cascade" }),
-  approvalRequestId: uuid("approval_request_id").references(() => insuranceApprovalRequests.id, { onDelete: "set null" }),
-  invoiceNumber: varchar("invoice_number", { length: 100 }).notNull().unique(),
+  encounterId: uuid("encounter_id").references(() => emrEncounters.id, { onDelete: "set null" }),
+  authorizationId: uuid("authorization_id").references(() => insuranceAuthorizations.id, { onDelete: "set null" }),
   claimNumber: varchar("claim_number", { length: 100 }).notNull().unique(),
-  serviceCode: varchar("service_code", { length: 100 }).notNull(),
-  diagnosisCodes: jsonb("diagnosis_codes").default([]).notNull(),
-  billedAmountCents: integer("billed_amount_cents").notNull(),
-  insurancePayableCents: integer("insurance_payable_cents").notNull(),
-  patientCopaymentCents: integer("patient_copayment_cents").notNull(),
-  status: varchar("status", { length: 50 }).default("Submitted").notNull(), // Submitted, Paid, Rejected, Resubmitted
+  originalClaimId: uuid("original_claim_id"),
+  status: varchar("status", { length: 50 }).default("Draft").notNull(),
+  totalAmountCents: integer("total_amount_cents").notNull(),
+  coveredAmountCents: integer("covered_amount_cents").default(0).notNull(),
+  patientCoPaymentCents: integer("patient_co_payment_cents").default(0).notNull(),
+  approvedAmountCents: integer("approved_amount_cents"),
+  rejectionCode: varchar("rejection_code", { length: 100 }),
   rejectionReason: text("rejection_reason"),
-  resubmissionCount: integer("resubmission_count").default(0).notNull(),
-  submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+  submissionCount: integer("submission_count").default(0).notNull(),
+  submittedAt: timestamp("submitted_at"),
+  decidedAt: timestamp("decided_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const insuranceClaimItems = pgTable("insurance_claim_items", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  claimId: uuid("claim_id").notNull().references(() => insuranceClaims.id, { onDelete: "cascade" }),
+  serviceCode: varchar("service_code", { length: 100 }).notNull(),
+  description: varchar("description", { length: 512 }).notNull(),
+  quantity: integer("quantity").default(1).notNull(),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+  coveragePercent: doublePrecision("coverage_percent").notNull(),
+  coveredAmountCents: integer("covered_amount_cents").notNull(),
+  patientResponsibilityCents: integer("patient_responsibility_cents").notNull(),
+  status: varchar("status", { length: 50 }).default("Submitted").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insuranceInvoices = pgTable("insurance_invoices", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  claimId: uuid("claim_id").notNull().references(() => insuranceClaims.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  invoiceNumber: varchar("invoice_number", { length: 100 }).notNull().unique(),
+  totalAmountCents: integer("total_amount_cents").notNull(),
+  insuranceDueCents: integer("insurance_due_cents").notNull(),
+  patientCoPaymentCents: integer("patient_co_payment_cents").notNull(),
+  status: varchar("status", { length: 50 }).default("Open").notNull(),
+  issuedAt: timestamp("issued_at").defaultNow().notNull(),
+  dueAt: timestamp("due_at").notNull(),
   paidAt: timestamp("paid_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const insuranceAttachments = pgTable("insurance_attachments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  claimId: uuid("claim_id").references(() => insuranceClaims.id, { onDelete: "cascade" }),
+  authorizationId: uuid("authorization_id").references(() => insuranceAuthorizations.id, { onDelete: "cascade" }),
+  fileName: varchar("file_name", { length: 512 }).notNull(),
+  fileUrl: varchar("file_url", { length: 1024 }).notNull(),
+  mimeType: varchar("mime_type", { length: 100 }).notNull(),
+  category: varchar("category", { length: 100 }).default("Supporting Document").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"),
 });

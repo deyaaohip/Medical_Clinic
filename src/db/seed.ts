@@ -55,6 +55,21 @@ import {
   labOrders,
   labOrderItems,
   labAttachments,
+  radiologyProcedures,
+  radiologyOrders,
+  radiologyDicomStudies,
+  radiologyReports,
+  radiologyComparisons,
+  radiologyAttachments,
+  insuranceCompanies,
+  insurancePlans,
+  patientInsurancePolicies,
+  insuranceBillingRules,
+  insuranceAuthorizations,
+  insuranceClaims,
+  insuranceClaimItems,
+  insuranceInvoices,
+  insuranceAttachments,
 } from "./schema";
 
 export async function runSeed() {
@@ -891,6 +906,33 @@ export async function runSeed() {
     fileUrl: "https://cdn.medsaas.com/lab/diabetes-monitoring-report.pdf",
     mimeType: "application/pdf",
   });
+
+  console.log("🩻 Seeding Radiology PACS and Insurance Revenue Cycle...");
+  const [procXray] = await db.insert(radiologyProcedures).values({ code: "RAD-XR-CHEST-2V", name: "Chest X-Ray – 2 Views", modality: "X-Ray", bodyPart: "Chest", priceCents: 15000, durationMinutes: 15, preparationInstructions: "Remove metallic objects from chest region." }).onConflictDoUpdate({ target: radiologyProcedures.code, set: { name: "Chest X-Ray – 2 Views" } }).returning();
+  const [procMri] = await db.insert(radiologyProcedures).values({ code: "RAD-MRI-BRAIN-C", name: "MRI Brain with Contrast", modality: "MRI", bodyPart: "Brain", requiresContrast: true, priceCents: 125000, durationMinutes: 45, preparationInstructions: "Screen for implants and renal function before gadolinium." }).onConflictDoUpdate({ target: radiologyProcedures.code, set: { name: "MRI Brain with Contrast" } }).returning();
+  const [procCt] = await db.insert(radiologyProcedures).values({ code: "RAD-CT-CHEST", name: "CT Chest High Resolution", modality: "CT", bodyPart: "Chest", priceCents: 85000, durationMinutes: 25, preparationInstructions: "Review pregnancy status and prior contrast reaction." }).onConflictDoUpdate({ target: radiologyProcedures.code, set: { name: "CT Chest High Resolution" } }).returning();
+  const [procUs] = await db.insert(radiologyProcedures).values({ code: "RAD-US-ABD", name: "Complete Abdominal Ultrasound", modality: "Ultrasound", bodyPart: "Abdomen", priceCents: 45000, durationMinutes: 30, preparationInstructions: "Fast for six hours before examination." }).onConflictDoUpdate({ target: radiologyProcedures.code, set: { name: "Complete Abdominal Ultrasound" } }).returning();
+
+  const priorDate = new Date(); priorDate.setMonth(priorDate.getMonth() - 8);
+  const [priorRad] = await db.insert(radiologyOrders).values({ tenantId: tenant1.id, branchId: branch1.id, patientId: pat1.id, orderingDoctorId: staffDoc1.id, encounterId: encounter1.id, procedureId: procXray.id, orderNumber: `RAD-PRIOR-${Date.now()}`, accessionNumber: `ACC-PRIOR-${Date.now()}`, clinicalIndication: "Baseline chest imaging for intermittent discomfort.", priority: "Routine", status: "Doctor Reviewed", scheduledAt: priorDate, orderedAt: priorDate, completedAt: priorDate }).returning();
+  const [currentRad] = await db.insert(radiologyOrders).values({ tenantId: tenant1.id, branchId: branch1.id, patientId: pat1.id, orderingDoctorId: staffDoc1.id, encounterId: encounter1.id, procedureId: procCt.id, orderNumber: `RAD-CURRENT-${Date.now()}`, accessionNumber: `ACC-CURRENT-${Date.now()}`, clinicalIndication: "Persistent exertional chest discomfort; evaluate lung parenchyma and mediastinum.", priority: "Urgent", status: "Reported", scheduledAt: new Date(), completedAt: new Date() }).returning();
+  const [priorStudy] = await db.insert(radiologyDicomStudies).values({ tenantId: tenant1.id, radiologyOrderId: priorRad.id, studyInstanceUid: `2.25.${Date.now()}101`, seriesInstanceUid: `2.25.${Date.now()}102`, modality: "X-Ray", seriesDescription: "PA and lateral chest", bodyPart: "Chest", instanceCount: 2, storageUrl: "https://cdn.medsaas.com/dicom/prior-chest-study.dcm", thumbnailUrl: "https://images.unsplash.com/photo-1516841273335-e39b37888115?auto=format&fit=crop&w=1000&q=80" }).returning();
+  const [currentStudy] = await db.insert(radiologyDicomStudies).values({ tenantId: tenant1.id, radiologyOrderId: currentRad.id, studyInstanceUid: `2.25.${Date.now()}201`, seriesInstanceUid: `2.25.${Date.now()}202`, modality: "CT", seriesDescription: "HRCT chest axial series", bodyPart: "Chest", instanceCount: 186, storageUrl: "https://cdn.medsaas.com/dicom/current-ct-chest-study.dcm", thumbnailUrl: "https://images.unsplash.com/photo-1559757175-0eb30cd8c063?auto=format&fit=crop&w=1000&q=80" }).returning();
+  const [radReport] = await db.insert(radiologyReports).values({ tenantId: tenant1.id, radiologyOrderId: currentRad.id, radiologistId: staffDoc1.id, findings: "Lungs are clear without focal consolidation. No pleural effusion. Cardiomediastinal silhouette is within normal limits. No suspicious pulmonary nodule.", impression: "No acute intrathoracic abnormality.", recommendations: "Clinical follow-up. Consider exercise stress testing if symptoms persist.", status: "Final", radiologistSignature: "Dr. Ahmed Mansour • DHA-2023-8911", reportedAt: new Date() }).returning();
+  await db.insert(radiologyComparisons).values({ tenantId: tenant1.id, currentOrderId: currentRad.id, priorOrderId: priorRad.id, comparisonNotes: "Compared with prior chest radiographs: no significant interval change and no new focal opacity.", createdByStaffId: staffDoc1.id });
+  await db.insert(radiologyAttachments).values({ tenantId: tenant1.id, radiologyOrderId: currentRad.id, fileName: "CT-chest-final-report.pdf", fileUrl: "https://cdn.medsaas.com/radiology/CT-chest-final-report.pdf", mimeType: "application/pdf", category: "Final Report" });
+
+  const [payer] = await db.insert(insuranceCompanies).values({ tenantId: tenant1.id, payerCode: `DAMAN-${Date.now()}`, name: "Daman National Health Insurance", companyType: "Government / Commercial", phone: "+971800432626", email: "claims@damanhealth.ae", claimsEndpoint: "https://api.damanhealth.ae/v1/claims", electronicPayerId: "DAMAN-UAE-001" }).returning();
+  const [plan] = await db.insert(insurancePlans).values({ tenantId: tenant1.id, insuranceCompanyId: payer.id, planCode: `PLAT-${Date.now()}`, name: "Platinum GN+ Direct Billing", networkTier: "Platinum GN+", defaultCoveragePercent: 85, defaultCoPaymentCents: 5000, annualDeductibleCents: 100000, annualLimitCents: 5000000, coverageRules: { outpatient: 85, radiology: 80, laboratory: 90, requiresPreAuthorizationAboveCents: 75000 } }).returning();
+  const coverageEnd = new Date(); coverageEnd.setFullYear(coverageEnd.getFullYear() + 1);
+  const [policy] = await db.insert(patientInsurancePolicies).values({ tenantId: tenant1.id, patientId: pat1.id, insuranceCompanyId: payer.id, insurancePlanId: plan.id, policyNumber: `POL-${Date.now()}`, memberId: "MEM-OMAR-891102", groupNumber: "GRP-DUBAI-100", holderName: pat1.fullName, relationshipToHolder: "Self", coverageStart: new Date(), coverageEnd, coPaymentCents: 5000, status: "Active", eligibilityVerifiedAt: new Date() }).returning();
+  await db.insert(insuranceBillingRules).values([{ tenantId: tenant1.id, insurancePlanId: plan.id, ruleName: "Advanced Imaging Pre-Authorization", serviceCategory: "Radiology", procedureCodePattern: "RAD-(MRI|CT)-*", requiresAuthorization: true, coveragePercent: 80, maxCoveredAmountCents: 100000, patientCoPaymentCents: 10000, conditions: { minimumClinicalNotes: true, requirePriorImaging: true } }, { tenantId: tenant1.id, insurancePlanId: plan.id, ruleName: "Routine Laboratory Coverage", serviceCategory: "Laboratory", procedureCodePattern: "LAB-*", requiresAuthorization: false, coveragePercent: 90, patientCoPaymentCents: 2500, conditions: { inNetworkOnly: true } }]);
+  const [auth] = await db.insert(insuranceAuthorizations).values({ tenantId: tenant1.id, patientPolicyId: policy.id, patientId: pat1.id, encounterId: encounter1.id, authorizationNumber: `AUTH-SEED-${Date.now()}`, serviceType: "CT Chest High Resolution", diagnosisCodes: ["R07.9"], requestedAmountCents: 85000, approvedAmountCents: 68000, status: "Approved", externalReference: "DAMAN-PA-772901", submittedAt: new Date(), decisionAt: new Date(), expiresAt: coverageEnd }).returning();
+  const [claim] = await db.insert(insuranceClaims).values({ tenantId: tenant1.id, patientPolicyId: policy.id, patientId: pat1.id, encounterId: encounter1.id, authorizationId: auth.id, claimNumber: `CLM-SEED-${Date.now()}`, status: "Rejected", totalAmountCents: 110000, coveredAmountCents: 88500, patientCoPaymentCents: 21500, rejectionCode: "DOC-102", rejectionReason: "Clinical indication attachment was missing from initial submission.", submissionCount: 1, submittedAt: new Date(), decidedAt: new Date() }).returning();
+  await db.insert(insuranceClaimItems).values([{ tenantId: tenant1.id, claimId: claim.id, serviceCode: procCt.code, description: procCt.name, quantity: 1, unitPriceCents: 85000, coveragePercent: 80, coveredAmountCents: 68000, patientResponsibilityCents: 17000, status: "Rejected" }, { tenantId: tenant1.id, claimId: claim.id, serviceCode: testHba1c.code, description: testHba1c.name, quantity: 1, unitPriceCents: 25000, coveragePercent: 82, coveredAmountCents: 20500, patientResponsibilityCents: 4500, status: "Rejected" }]);
+  const invoiceDue = new Date(); invoiceDue.setDate(invoiceDue.getDate() + 30);
+  await db.insert(insuranceInvoices).values({ tenantId: tenant1.id, claimId: claim.id, patientId: pat1.id, invoiceNumber: `INV-INS-SEED-${Date.now()}`, totalAmountCents: 110000, insuranceDueCents: 88500, patientCoPaymentCents: 21500, status: "Open", dueAt: invoiceDue });
+  await db.insert(insuranceAttachments).values({ tenantId: tenant1.id, claimId: claim.id, authorizationId: auth.id, fileName: "CT-clinical-indication-and-authorization.pdf", fileUrl: "https://cdn.medsaas.com/insurance/CT-clinical-indication-and-authorization.pdf", mimeType: "application/pdf", category: "Authorization Support" });
 
   console.log("✨ All Comprehensive Healthcare Modules Database Seeding Completed Successfully!");
 }
