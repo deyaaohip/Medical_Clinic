@@ -18,6 +18,7 @@ import {
   PlusCircle,
   Stethoscope,
   Activity,
+  FileText,
   ChevronRight,
   Headset,
 } from "lucide-react";
@@ -42,6 +43,14 @@ export function ClinicSaaSNavbar({ tenantId, currentLocale = "en" }: { tenantId:
         { href: `/${tenantId}/patients`, labelEn: "Master Patient Directory", labelAr: "سجل المرضى الشامل (Directory)", icon: Bed, badge: "Unlimited" },
         { href: `/${tenantId}/patients/register`, labelEn: "+ Register New Patient", labelAr: "+ تسجيل مريض جديد", icon: UserPlus },
         { href: `/${tenantId}/patients/merge`, labelEn: "Merge Duplicate Patients", labelAr: "دمج المرضى المكررين Utility", icon: GitMerge },
+      ],
+    },
+    {
+      category: currentLocale === "ar" ? "السجل الطبي الإلكتروني (EMR)" : "Electronic Medical Records",
+      items: [
+        { href: `/${tenantId}/emr`, labelEn: "SOAP Notes & Medical Timeline", labelAr: "ملاحظات SOAP والخط الزمني الطبي", icon: FileText, badge: "SOAP" },
+        { href: `/${tenantId}/prescriptions`, labelEn: "Prescription & eRx Hub", labelAr: "الوصفات الإلكترونية eRx", icon: Stethoscope, badge: "QR" },
+        { href: `/${tenantId}/laboratory`, labelEn: "Laboratory Orders & Results", labelAr: "المختبر والنتائج", icon: Activity, badge: "Lab" },
       ],
     },
     {

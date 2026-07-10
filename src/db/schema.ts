@@ -683,3 +683,169 @@ export const appointmentReminders = pgTable("appointment_reminders", {
   status: varchar("status", { length: 50 }).default("Sent").notNull(), // 'Pending', 'Sent', 'Failed'
   sentAt: timestamp("sent_at").defaultNow().notNull(),
 });
+
+// =========================================================================
+// ELECTRONIC MEDICAL RECORD SYSTEM TABLES
+// =========================================================================
+
+export const emrTemplates = pgTable("emr_templates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  specialty: varchar("specialty", { length: 150 }).default("General Medicine").notNull(),
+  templateType: varchar("template_type", { length: 100 }).default("SOAP").notNull(),
+  contentSchema: jsonb("content_schema").default({}).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const emrEncounters = pgTable("emr_encounters", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").notNull().references(() => clinicBranches.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  appointmentId: uuid("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
+  doctorId: uuid("doctor_id").notNull().references(() => staffProfiles.id, { onDelete: "cascade" }),
+  encounterNumber: varchar("encounter_number", { length: 100 }).notNull().unique(),
+  chiefComplaint: text("chief_complaint").notNull(),
+  subjective: text("subjective").notNull(),
+  objective: text("objective").notNull(),
+  assessment: text("assessment").notNull(),
+  treatmentPlan: text("treatment_plan").notNull(),
+  physicalExamination: text("physical_examination"),
+  diagnosisText: text("diagnosis_text").notNull(),
+  icd10Codes: jsonb("icd10_codes").default([]).notNull(),
+  progressNotes: text("progress_notes"),
+  clinicalNotes: text("clinical_notes"),
+  followUpInstructions: text("follow_up_instructions"),
+  followUpDate: timestamp("follow_up_date"),
+  templateId: uuid("template_id").references(() => emrTemplates.id, { onDelete: "set null" }),
+  attachments: jsonb("attachments").default([]).notNull(),
+  imageUrls: jsonb("image_urls").default([]).notNull(),
+  voiceNoteUrls: jsonb("voice_note_urls").default([]).notNull(),
+  doctorSignatureUrl: varchar("doctor_signature_url", { length: 1024 }),
+  pdfReportUrl: varchar("pdf_report_url", { length: 1024 }),
+  status: varchar("status", { length: 50 }).default("Signed").notNull(),
+  auditTrail: jsonb("audit_trail").default([]).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+// =========================================================================
+// PRESCRIPTION MANAGEMENT SYSTEM TABLES
+// =========================================================================
+
+export const medicineDatabase = pgTable("medicine_database", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  brandName: varchar("brand_name", { length: 255 }).notNull(),
+  genericName: varchar("generic_name", { length: 255 }).notNull(),
+  strength: varchar("strength", { length: 100 }).notNull(),
+  dosageForm: varchar("dosage_form", { length: 100 }).default("Tablet").notNull(),
+  route: varchar("route", { length: 100 }).default("Oral").notNull(),
+  interactions: jsonb("interactions").default([]).notNull(),
+  allergyWarnings: jsonb("allergy_warnings").default([]).notNull(),
+  genericAlternatives: jsonb("generic_alternatives").default([]).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const prescriptions = pgTable("prescriptions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").notNull().references(() => clinicBranches.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  encounterId: uuid("encounter_id").references(() => emrEncounters.id, { onDelete: "set null" }),
+  doctorId: uuid("doctor_id").notNull().references(() => staffProfiles.id, { onDelete: "cascade" }),
+  prescriptionNumber: varchar("prescription_number", { length: 100 }).notNull().unique(),
+  diagnosisSummary: text("diagnosis_summary"),
+  status: varchar("status", { length: 50 }).default("Active").notNull(),
+  refillAllowed: boolean("refill_allowed").default(false).notNull(),
+  refillCount: integer("refill_count").default(0).notNull(),
+  allergyCheckStatus: varchar("allergy_check_status", { length: 50 }).default("Passed").notNull(),
+  interactionCheckStatus: varchar("interaction_check_status", { length: 50 }).default("Passed").notNull(),
+  electronicSignatureUrl: varchar("electronic_signature_url", { length: 1024 }),
+  pdfUrl: varchar("pdf_url", { length: 1024 }),
+  qrVerificationToken: varchar("qr_verification_token", { length: 255 }).notNull(),
+  printedAt: timestamp("printed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const prescriptionItems = pgTable("prescription_items", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  prescriptionId: uuid("prescription_id").notNull().references(() => prescriptions.id, { onDelete: "cascade" }),
+  medicineId: uuid("medicine_id").references(() => medicineDatabase.id, { onDelete: "set null" }),
+  medicineName: varchar("medicine_name", { length: 255 }).notNull(),
+  dosage: varchar("dosage", { length: 255 }).notNull(),
+  frequency: varchar("frequency", { length: 255 }).notNull(),
+  duration: varchar("duration", { length: 255 }).notNull(),
+  instructions: text("instructions"),
+  genericAlternativeSelected: varchar("generic_alternative_selected", { length: 255 }),
+});
+
+export const prescriptionTemplates = pgTable("prescription_templates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  diagnosisContext: varchar("diagnosis_context", { length: 255 }).notNull(),
+  itemsSchema: jsonb("items_schema").default([]).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// =========================================================================
+// LABORATORY MODULE TABLES
+// =========================================================================
+
+export const labPackages = pgTable("lab_packages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 100 }).notNull(),
+  tests: jsonb("tests").default([]).notNull(),
+  priceCents: integer("price_cents").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const labOrders = pgTable("lab_orders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").notNull().references(() => clinicBranches.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  encounterId: uuid("encounter_id").references(() => emrEncounters.id, { onDelete: "set null" }),
+  doctorId: uuid("doctor_id").notNull().references(() => staffProfiles.id, { onDelete: "cascade" }),
+  orderNumber: varchar("order_number", { length: 100 }).notNull().unique(),
+  packageId: uuid("package_id").references(() => labPackages.id, { onDelete: "set null" }),
+  priority: varchar("priority", { length: 50 }).default("Routine").notNull(),
+  status: varchar("status", { length: 50 }).default("Ordered").notNull(),
+  clinicalIndication: text("clinical_indication"),
+  sampleCollectedAt: timestamp("sample_collected_at"),
+  technicianUserId: uuid("technician_user_id").references(() => users.id, { onDelete: "set null" }),
+  doctorReviewedAt: timestamp("doctor_reviewed_at"),
+  notificationStatus: varchar("notification_status", { length: 50 }).default("Pending").notNull(),
+  pdfReportUrl: varchar("pdf_report_url", { length: 1024 }),
+  attachments: jsonb("attachments").default([]).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const labOrderTests = pgTable("lab_order_tests", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  labOrderId: uuid("lab_order_id").notNull().references(() => labOrders.id, { onDelete: "cascade" }),
+  testName: varchar("test_name", { length: 255 }).notNull(),
+  loincCode: varchar("loinc_code", { length: 100 }),
+  sampleType: varchar("sample_type", { length: 100 }).default("Blood").notNull(),
+  referenceRange: varchar("reference_range", { length: 255 }),
+  unit: varchar("unit", { length: 50 }),
+  resultValue: varchar("result_value", { length: 255 }),
+  abnormalFlag: varchar("abnormal_flag", { length: 50 }).default("Normal").notNull(),
+  resultEnteredAt: timestamp("result_entered_at"),
+});
