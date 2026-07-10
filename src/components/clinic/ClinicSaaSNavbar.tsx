@@ -18,9 +18,11 @@ import {
   PlusCircle,
   Stethoscope,
   Activity,
-  FileText,
   ChevronRight,
   Headset,
+  FileHeart,
+  Pill,
+  FlaskConical,
 } from "lucide-react";
 
 export function ClinicSaaSNavbar({ tenantId, currentLocale = "en" }: { tenantId: string; currentLocale?: "en" | "ar" }) {
@@ -46,11 +48,11 @@ export function ClinicSaaSNavbar({ tenantId, currentLocale = "en" }: { tenantId:
       ],
     },
     {
-      category: currentLocale === "ar" ? "السجل الطبي الإلكتروني (EMR)" : "Electronic Medical Records",
+      category: currentLocale === "ar" ? "العمليات السريرية (Clinical Care)" : "Clinical Care Operations",
       items: [
-        { href: `/${tenantId}/emr`, labelEn: "SOAP Notes & Medical Timeline", labelAr: "ملاحظات SOAP والخط الزمني الطبي", icon: FileText, badge: "SOAP" },
-        { href: `/${tenantId}/prescriptions`, labelEn: "Prescription & eRx Hub", labelAr: "الوصفات الإلكترونية eRx", icon: Stethoscope, badge: "QR" },
-        { href: `/${tenantId}/laboratory`, labelEn: "Laboratory Orders & Results", labelAr: "المختبر والنتائج", icon: Activity, badge: "Lab" },
+        { href: `/${tenantId}/emr`, labelEn: "Electronic Medical Records", labelAr: "السجل الطبي الإلكتروني EMR", icon: FileHeart, badge: "SOAP" },
+        { href: `/${tenantId}/prescriptions`, labelEn: "Prescription Management", labelAr: "إدارة الوصفات والأدوية", icon: Pill, badge: "QR" },
+        { href: `/${tenantId}/laboratory`, labelEn: "Laboratory & Results", labelAr: "المختبر والنتائج", icon: FlaskConical, badge: "Live" },
       ],
     },
     {

@@ -1,4 +1,5 @@
 import { db } from "./index";
+import { eq } from "drizzle-orm";
 import {
   subscriptionPlans,
   tenants,
@@ -39,6 +40,21 @@ import {
   appointments,
   waitingListQueues,
   appointmentReminders,
+  icd10Codes,
+  emrTemplates,
+  emrEncounters,
+  emrEncounterDiagnoses,
+  emrAttachments,
+  emrVoiceNotes,
+  medicines,
+  prescriptionTemplates,
+  prescriptions,
+  prescriptionItems,
+  labTests,
+  labPackages,
+  labOrders,
+  labOrderItems,
+  labAttachments,
 } from "./schema";
 
 export async function runSeed() {
@@ -546,9 +562,12 @@ export async function runSeed() {
       priority: "VIP",
       isRecurring: false,
       notes: "Patient requested thorough EKG inspection due to new workout regimen.",
-      checkInTime: new Date(morningToday.getTime() - 15 * 60000), // checked in 15 mins early
+      checkInTime: new Date(morningToday.getTime() - 15 * 60000),
     },
-  ]).returning();
+  ]).onConflictDoUpdate({
+    target: appointments.appointmentNumber,
+    set: { title: "Diabetic Cardiovascular Screening & Echocardiogram", updatedAt: new Date() },
+  }).returning();
 
   const [app2] = await db.insert(appointments).values([
     {
@@ -570,7 +589,10 @@ export async function runSeed() {
       recurrenceRule: "FREQ=MONTHLY;COUNT=6",
       notes: "Monthly pediatric evaluation.",
     },
-  ]).returning();
+  ]).onConflictDoUpdate({
+    target: appointments.appointmentNumber,
+    set: { title: "Pediatric Asthma Follow-up & Immunization Check", updatedAt: new Date() },
+  }).returning();
 
   await db.insert(appointments).values([
     {
@@ -628,6 +650,247 @@ export async function runSeed() {
     { tenantId: tenant1.id, appointmentId: app1.id, patientId: pat1.id, reminderType: "WhatsApp", scheduledTime: new Date(morningToday.getTime() - 24 * 3600 * 1000), status: "Sent" },
     { tenantId: tenant1.id, appointmentId: app2.id, patientId: pat2.id, reminderType: "SMS", scheduledTime: new Date(afternoonToday.getTime() - 2 * 3600 * 1000), status: "Sent" },
   ]).onConflictDoNothing();
+
+  // =========================================================================
+  // SEED EMR, PRESCRIPTION & LABORATORY SYSTEMS
+  // =========================================================================
+  console.log("🩺 Seeding EMR, Prescriptions & Laboratory workflows...");
+
+  const [icdDiabetes] = await db.insert(icd10Codes).values({
+    code: "E11.9",
+    description: "Type 2 diabetes mellitus without complications",
+    category: "Endocrine, nutritional and metabolic diseases",
+  }).onConflictDoUpdate({ target: icd10Codes.code, set: { description: "Type 2 diabetes mellitus without complications" } }).returning();
+  const [icdAsthma] = await db.insert(icd10Codes).values({
+    code: "J45.30",
+    description: "Mild persistent asthma, uncomplicated",
+    category: "Diseases of the respiratory system",
+  }).onConflictDoUpdate({ target: icd10Codes.code, set: { description: "Mild persistent asthma, uncomplicated" } }).returning();
+  await db.insert(icd10Codes).values([
+    { code: "I10", description: "Essential (primary) hypertension", category: "Diseases of the circulatory system" },
+    { code: "R07.9", description: "Chest pain, unspecified", category: "Symptoms and abnormal clinical findings" },
+    { code: "Z00.00", description: "General adult medical examination without abnormal findings", category: "Factors influencing health status" },
+  ]).onConflictDoNothing();
+
+  await db.insert(emrTemplates).values([
+    {
+      tenantId: tenant1.id,
+      name: "Cardiology Follow-up SOAP",
+      specialty: "Cardiology",
+      chiefComplaint: "Follow-up for cardiovascular risk assessment",
+      subjective: "Patient reports adherence to medication. Denies chest pain, dyspnea, or palpitations.",
+      objective: "Vitals stable. Cardiovascular examination and ECG reviewed.",
+      assessment: "Cardiovascular risk factors are clinically stable.",
+      treatmentPlan: "Continue current therapy, lifestyle optimization, and interval laboratory monitoring.",
+      physicalExamination: { general: "Alert and oriented", cardiovascular: "Regular rhythm, no murmur", respiratory: "Clear bilaterally" },
+    },
+    {
+      tenantId: tenant1.id,
+      name: "Pediatric Asthma Progress Note",
+      specialty: "Pediatrics",
+      chiefComplaint: "Wheezing and exercise-related cough",
+      subjective: "Parent reports intermittent symptoms after activity.",
+      objective: "Mild expiratory wheeze. Oxygen saturation maintained.",
+      assessment: "Mild persistent asthma, currently stable.",
+      treatmentPlan: "Continue rescue inhaler and review trigger avoidance.",
+      physicalExamination: { general: "Comfortable child", respiratory: "Mild expiratory wheeze", cardiovascular: "Normal S1/S2" },
+    },
+  ]).onConflictDoNothing();
+
+  const [encounter1] = await db.insert(emrEncounters).values({
+    tenantId: tenant1.id,
+    branchId: branch1.id,
+    patientId: pat1.id,
+    doctorId: staffDoc1.id,
+    appointmentId: app1.id,
+    encounterNumber: `ENC-SEED-${Date.now()}`,
+    visitType: "Outpatient Follow-up",
+    status: "Signed",
+    chiefComplaint: "Diabetes follow-up with intermittent exertional chest discomfort",
+    subjective: "Patient reports improved diet adherence and home fasting glucose between 100–115 mg/dL. Mild chest tightness only during intense exercise.",
+    objective: "BP 124/82, HR 76 bpm, SpO2 99%. ECG shows sinus rhythm without acute ST changes.",
+    assessment: "Type 2 diabetes controlled on current regimen. Low-risk atypical exertional chest discomfort.",
+    treatmentPlan: "Continue Metformin 500 mg twice daily. Order HbA1c, lipid panel, renal function and schedule exercise stress test if symptoms persist.",
+    physicalExamination: { general: "Well appearing, no distress", cardiovascular: "Regular rate and rhythm, no murmur", respiratory: "Clear to auscultation", abdomen: "Soft and non-tender" },
+    followUpInstructions: "Return in 12 weeks or earlier for persistent chest pain, dyspnea, or syncope.",
+    followUpDate: nextMonth,
+    clinicalNotes: "Discussed red flag symptoms and shared decision-making. Patient verbalized understanding.",
+    doctorSignature: "Dr. Ahmed Mansour • DHA-2023-8911",
+    signedAt: new Date(),
+  }).returning();
+
+  await db.insert(emrEncounterDiagnoses).values([
+    { tenantId: tenant1.id, encounterId: encounter1.id, icd10CodeId: icdDiabetes.id, diagnosisText: icdDiabetes.description, isPrimary: true },
+  ]);
+  await db.insert(emrAttachments).values({
+    tenantId: tenant1.id,
+    encounterId: encounter1.id,
+    fileName: "omar-ecg-12-lead.pdf",
+    fileUrl: "https://cdn.medsaas.com/emr/omar-ecg-12-lead.pdf",
+    mimeType: "application/pdf",
+    category: "ECG Report",
+    fileSizeBytes: 482110,
+  });
+  await db.insert(emrVoiceNotes).values({
+    tenantId: tenant1.id,
+    encounterId: encounter1.id,
+    audioUrl: "https://cdn.medsaas.com/emr/voice/encounter-cardiology-note.mp3",
+    durationSeconds: 48,
+    transcription: "Patient remains clinically stable. Continue current diabetic therapy and arrange interval laboratory monitoring.",
+  });
+  await db.insert(auditLogs).values([
+    { tenantId: tenant1.id, userId: doc1User.id, action: "EMR_ENCOUNTER_CREATED", resourceType: "EmrEncounter", resourceId: encounter1.id, metadata: { encounterNumber: encounter1.encounterNumber } },
+    { tenantId: tenant1.id, userId: doc1User.id, action: "EMR_ENCOUNTER_SIGNED", resourceType: "EmrEncounter", resourceId: encounter1.id, metadata: { signature: encounter1.doctorSignature } },
+  ]);
+
+  const [medMetformin] = await db.insert(medicines).values({
+    genericName: "Metformin Hydrochloride",
+    brandName: "Glucophage",
+    strength: "500 mg",
+    dosageForm: "Film-coated tablet",
+    manufacturer: "Merck",
+    drugClass: "Biguanide antidiabetic",
+    allergyKeywords: ["metformin", "biguanide"],
+    genericAlternatives: ["Metformin 500 mg Generic", "Metformin XR 500 mg"],
+  }).returning();
+  const [medAmoxicillin] = await db.insert(medicines).values({
+    genericName: "Amoxicillin",
+    brandName: "Amoxil",
+    strength: "500 mg",
+    dosageForm: "Capsule",
+    manufacturer: "GSK",
+    drugClass: "Penicillin antibiotic",
+    allergyKeywords: ["penicillin", "amoxicillin"],
+    genericAlternatives: ["Amoxicillin 500 mg Generic"],
+  }).returning();
+  const [medWarfarin] = await db.insert(medicines).values({
+    genericName: "Warfarin Sodium",
+    brandName: "Coumadin",
+    strength: "5 mg",
+    dosageForm: "Tablet",
+    manufacturer: "Bristol Myers Squibb",
+    drugClass: "Vitamin K antagonist anticoagulant",
+    allergyKeywords: ["warfarin"],
+    genericAlternatives: ["Warfarin Sodium 5 mg Generic"],
+  }).returning();
+  const [medIbuprofen] = await db.insert(medicines).values({
+    genericName: "Ibuprofen",
+    brandName: "Brufen",
+    strength: "400 mg",
+    dosageForm: "Tablet",
+    manufacturer: "Abbott",
+    drugClass: "NSAID",
+    interactionMedicineIds: [medWarfarin.id],
+    allergyKeywords: ["nsaid", "ibuprofen"],
+    genericAlternatives: ["Ibuprofen 400 mg Generic"],
+  }).returning();
+  await db.update(medicines).set({ interactionMedicineIds: [medIbuprofen.id] }).where(eq(medicines.id, medWarfarin.id));
+
+  await db.insert(prescriptionTemplates).values({
+    tenantId: tenant1.id,
+    name: "Stable Type 2 Diabetes Refill",
+    diagnosisLabel: "Type 2 diabetes mellitus without complications",
+    items: [{ medicineId: medMetformin.id, dosage: "500 mg", frequency: "Twice daily", duration: "90 days", route: "Oral", quantity: 180, refillsAllowed: 2 }],
+  });
+
+  const rxValid = new Date();
+  rxValid.setMonth(rxValid.getMonth() + 6);
+  const [rx1] = await db.insert(prescriptions).values({
+    tenantId: tenant1.id,
+    branchId: branch1.id,
+    patientId: pat1.id,
+    doctorId: staffDoc1.id,
+    encounterId: encounter1.id,
+    prescriptionNumber: `RX-SEED-${Date.now()}`,
+    diagnosis: "Type 2 diabetes mellitus without complications (E11.9)",
+    instructions: "Take with meals. Monitor fasting glucose and report symptoms of intolerance.",
+    status: "Active",
+    doctorSignature: "Dr. Ahmed Mansour • DHA-2023-8911",
+    signedAt: new Date(),
+    qrVerificationToken: `rxv_seed_${crypto.randomUUID()}`,
+    validUntil: rxValid,
+  }).returning();
+  await db.insert(prescriptionItems).values({
+    tenantId: tenant1.id,
+    prescriptionId: rx1.id,
+    medicineId: medMetformin.id,
+    dosage: "500 mg",
+    frequency: "Twice daily with meals",
+    duration: "90 days",
+    route: "Oral",
+    quantity: 180,
+    refillsAllowed: 2,
+    instructions: "Do not take on an empty stomach.",
+  });
+
+  const [testHba1c] = await db.insert(labTests).values({
+    code: "HBA1C",
+    name: "Hemoglobin A1c",
+    category: "Clinical Chemistry",
+    sampleType: "EDTA Whole Blood",
+    unit: "%",
+    referenceRangeMale: "4.0–5.6",
+    referenceRangeFemale: "4.0–5.6",
+    priceCents: 6500,
+    turnaroundMinutes: 240,
+  }).onConflictDoUpdate({ target: labTests.code, set: { name: "Hemoglobin A1c" } }).returning();
+  const [testGlucose] = await db.insert(labTests).values({
+    code: "FBS",
+    name: "Fasting Blood Glucose",
+    category: "Clinical Chemistry",
+    sampleType: "Serum",
+    unit: "mg/dL",
+    referenceRangeMale: "70–99",
+    referenceRangeFemale: "70–99",
+    priceCents: 2500,
+    turnaroundMinutes: 120,
+  }).onConflictDoUpdate({ target: labTests.code, set: { name: "Fasting Blood Glucose" } }).returning();
+  const [testCbc] = await db.insert(labTests).values({
+    code: "CBC",
+    name: "Complete Blood Count",
+    category: "Hematology",
+    sampleType: "EDTA Whole Blood",
+    unit: null,
+    referenceRangeMale: "Analyzer-specific adult male range",
+    referenceRangeFemale: "Analyzer-specific adult female range",
+    priceCents: 4500,
+    turnaroundMinutes: 180,
+  }).onConflictDoUpdate({ target: labTests.code, set: { name: "Complete Blood Count" } }).returning();
+
+  await db.insert(labPackages).values({
+    tenantId: tenant1.id,
+    name: "Diabetes Monitoring Package",
+    description: "HbA1c, fasting glucose and complete blood count with same-day physician review.",
+    testIds: [testHba1c.id, testGlucose.id, testCbc.id],
+    priceCents: 12500,
+  });
+
+  const [labOrder1] = await db.insert(labOrders).values({
+    tenantId: tenant1.id,
+    branchId: branch1.id,
+    patientId: pat1.id,
+    orderingDoctorId: staffDoc1.id,
+    encounterId: encounter1.id,
+    orderNumber: `LAB-SEED-${Date.now()}`,
+    priority: "Urgent",
+    status: "Results Ready",
+    clinicalNotes: "Diabetes interval monitoring; fasting sample confirmed.",
+    sampleCollectedAt: new Date(),
+    collectedByUserId: recep1User.id,
+    completedAt: new Date(),
+  }).returning();
+  await db.insert(labOrderItems).values([
+    { tenantId: tenant1.id, labOrderId: labOrder1.id, labTestId: testHba1c.id, status: "Resulted", resultValue: "6.8", referenceRange: "4.0–5.6", isAbnormal: true, abnormalFlag: "H", technicianUserId: recep1User.id, resultedAt: new Date() },
+    { tenantId: tenant1.id, labOrderId: labOrder1.id, labTestId: testGlucose.id, status: "Resulted", resultValue: "108", referenceRange: "70–99", isAbnormal: true, abnormalFlag: "H", technicianUserId: recep1User.id, resultedAt: new Date() },
+    { tenantId: tenant1.id, labOrderId: labOrder1.id, labTestId: testCbc.id, status: "Resulted", resultValue: "Within normal limits", referenceRange: "Analyzer-specific", isAbnormal: false, technicianUserId: recep1User.id, resultedAt: new Date() },
+  ]);
+  await db.insert(labAttachments).values({
+    tenantId: tenant1.id,
+    labOrderId: labOrder1.id,
+    fileName: "LAB-diabetes-monitoring-report.pdf",
+    fileUrl: "https://cdn.medsaas.com/lab/diabetes-monitoring-report.pdf",
+    mimeType: "application/pdf",
+  });
 
   console.log("✨ All Comprehensive Healthcare Modules Database Seeding Completed Successfully!");
 }
