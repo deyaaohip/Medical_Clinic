@@ -23,6 +23,8 @@ import {
   FileHeart,
   Pill,
   FlaskConical,
+  ScanLine,
+  ShieldCheck,
 } from "lucide-react";
 
 export function ClinicSaaSNavbar({ tenantId, currentLocale = "en" }: { tenantId: string; currentLocale?: "en" | "ar" }) {
@@ -53,6 +55,8 @@ export function ClinicSaaSNavbar({ tenantId, currentLocale = "en" }: { tenantId:
         { href: `/${tenantId}/emr`, labelEn: "Electronic Medical Records", labelAr: "السجل الطبي الإلكتروني EMR", icon: FileHeart, badge: "SOAP" },
         { href: `/${tenantId}/prescriptions`, labelEn: "Prescription Management", labelAr: "إدارة الوصفات والأدوية", icon: Pill, badge: "QR" },
         { href: `/${tenantId}/laboratory`, labelEn: "Laboratory & Results", labelAr: "المختبر والنتائج", icon: FlaskConical, badge: "Live" },
+        { href: `/${tenantId}/radiology`, labelEn: "Radiology Imaging & DICOM", labelAr: "الأشعة و DICOM", icon: ScanLine, badge: "DICOM" },
+        { href: `/${tenantId}/insurance`, labelEn: "Insurance Claims & Approvals", labelAr: "التأمين والمطالبات", icon: ShieldCheck, badge: "Claims" },
       ],
     },
     {
@@ -112,18 +116,9 @@ export function ClinicSaaSNavbar({ tenantId, currentLocale = "en" }: { tenantId:
                       <Icon className={cn("h-4 w-4 shrink-0 transition-transform group-hover:scale-110", isActive ? "text-white" : "text-teal-600 dark:text-teal-400")} />
                       <span className="truncate">{currentLocale === "ar" ? item.labelAr : item.labelEn}</span>
                     </div>
-
                     <div className="flex items-center space-x-1.5 rtl:space-x-reverse">
                       {item.badge && (
-                        <Badge
-                          variant={isActive ? "outline" : "default"}
-                          className={cn(
-                            "px-1.5 py-0 text-[9px] font-black tracking-tighter uppercase rounded-md",
-                            isActive ? "border-white/40 bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300"
-                          )}
-                        >
-                          {item.badge}
-                        </Badge>
+                        <Badge variant={isActive ? "outline" : "default"} className={cn("px-1.5 py-0 text-[9px] font-black tracking-tighter uppercase rounded-md", isActive ? "border-white/40 bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300")}>{item.badge}</Badge>
                       )}
                       <ChevronRight className={cn("h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity rtl:rotate-180 shrink-0", isActive ? "text-white opacity-100" : "text-slate-400")} />
                     </div>
