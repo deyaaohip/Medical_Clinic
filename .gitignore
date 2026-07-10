@@ -1,0 +1,25 @@
+/node_modules
+/.next/
+/out/
+/dist/
+/.open-next/
+
+# Production dotenv
+.env*
+!.env.example
+
+# Custom files
+/tmp/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Database / backups
+*.sql
+*.pgdump
+*.sqlite
+
+# OS files
+.DS_Store
+*.pem
