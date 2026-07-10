@@ -25,6 +25,9 @@ import {
   FlaskConical,
   ScanLine,
   ShieldCheck,
+  CreditCard,
+  Package,
+  Brain,
 } from "lucide-react";
 
 export function ClinicSaaSNavbar({ tenantId, currentLocale = "en" }: { tenantId: string; currentLocale?: "en" | "ar" }) {
@@ -55,8 +58,11 @@ export function ClinicSaaSNavbar({ tenantId, currentLocale = "en" }: { tenantId:
         { href: `/${tenantId}/emr`, labelEn: "Electronic Medical Records", labelAr: "السجل الطبي الإلكتروني EMR", icon: FileHeart, badge: "SOAP" },
         { href: `/${tenantId}/prescriptions`, labelEn: "Prescription Management", labelAr: "إدارة الوصفات والأدوية", icon: Pill, badge: "QR" },
         { href: `/${tenantId}/laboratory`, labelEn: "Laboratory & Results", labelAr: "المختبر والنتائج", icon: FlaskConical, badge: "Live" },
-        { href: `/${tenantId}/radiology`, labelEn: "Radiology & DICOM PACS", labelAr: "الأشعة ونظام DICOM", icon: ScanLine, badge: "PACS" },
-        { href: `/${tenantId}/insurance`, labelEn: "Insurance & Claims", labelAr: "التأمين والمطالبات", icon: ShieldCheck, badge: "RCM" },
+        { href: `/${tenantId}/radiology`, labelEn: "Radiology Imaging & DICOM", labelAr: "الأشعة و DICOM", icon: ScanLine, badge: "DICOM" },
+        { href: `/${tenantId}/insurance`, labelEn: "Insurance Claims & Approvals", labelAr: "التأمين والمطالبات", icon: ShieldCheck, badge: "Claims" },
+        { href: `/${tenantId}/finance`, labelEn: "Financial Revenue & Accounting", labelAr: "المالية والمحاسبة", icon: CreditCard, badge: "AR" },
+        { href: `/${tenantId}/inventory`, labelEn: "Inventory & Stock Control", labelAr: "المخزون والمستودعات", icon: Package, badge: "Stock" },
+        { href: `/${tenantId}/ai-engine`, labelEn: "Clinical AI Engine", labelAr: "محرك الذكاء الاصطناعي السريري", icon: Brain, badge: "MD Review" },
       ],
     },
     {

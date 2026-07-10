@@ -1193,3 +1193,174 @@ export const insuranceAttachments = pgTable("insurance_attachments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"),
 });
+
+// =========================================================================
+// FINANCIAL MODULE TABLES
+// =========================================================================
+
+export const financialPackages = pgTable("financial_packages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 100 }).notNull(),
+  services: jsonb("services").default([]).notNull(),
+  priceCents: integer("price_cents").notNull(),
+  taxPercent: doublePrecision("tax_percent").default(5).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const financialInvoices = pgTable("financial_invoices", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").notNull().references(() => clinicBranches.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  appointmentId: uuid("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
+  invoiceNumber: varchar("invoice_number", { length: 100 }).notNull().unique(),
+  subtotalCents: integer("subtotal_cents").notNull(),
+  discountCents: integer("discount_cents").default(0).notNull(),
+  taxCents: integer("tax_cents").default(0).notNull(),
+  totalCents: integer("total_cents").notNull(),
+  insuranceCoveredCents: integer("insurance_covered_cents").default(0).notNull(),
+  patientDueCents: integer("patient_due_cents").notNull(),
+  outstandingBalanceCents: integer("outstanding_balance_cents").notNull(),
+  status: varchar("status", { length: 50 }).default("Open").notNull(), // Open, Paid, Partial, Refunded, Void
+  accountingExportStatus: varchar("accounting_export_status", { length: 50 }).default("Pending").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const financialPayments = pgTable("financial_payments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  invoiceId: uuid("invoice_id").notNull().references(() => financialInvoices.id, { onDelete: "cascade" }),
+  receiptNumber: varchar("receipt_number", { length: 100 }).notNull().unique(),
+  method: varchar("method", { length: 50 }).notNull(), // Cash, Card, Bank Transfer, Insurance
+  amountCents: integer("amount_cents").notNull(),
+  gatewayReference: varchar("gateway_reference", { length: 255 }),
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const financialRefunds = pgTable("financial_refunds", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  invoiceId: uuid("invoice_id").notNull().references(() => financialInvoices.id, { onDelete: "cascade" }),
+  paymentId: uuid("payment_id").references(() => financialPayments.id, { onDelete: "set null" }),
+  refundNumber: varchar("refund_number", { length: 100 }).notNull().unique(),
+  amountCents: integer("amount_cents").notNull(),
+  reason: text("reason").notNull(),
+  status: varchar("status", { length: 50 }).default("Processed").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// =========================================================================
+// INVENTORY MODULE TABLES
+// =========================================================================
+
+export const inventorySuppliers = pgTable("inventory_suppliers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  contactName: varchar("contact_name", { length: 255 }),
+  email: varchar("email", { length: 255 }),
+  phone: varchar("phone", { length: 50 }),
+  address: text("address"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const inventoryWarehouses = pgTable("inventory_warehouses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").notNull().references(() => clinicBranches.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  locationCode: varchar("location_code", { length: 100 }).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const inventoryItems = pgTable("inventory_items", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  itemType: varchar("item_type", { length: 100 }).notNull(), // Medicine, Medical Supply
+  name: varchar("name", { length: 255 }).notNull(),
+  sku: varchar("sku", { length: 100 }).notNull(),
+  barcode: varchar("barcode", { length: 100 }),
+  qrCode: varchar("qr_code", { length: 255 }),
+  unit: varchar("unit", { length: 50 }).default("unit").notNull(),
+  lowStockThreshold: integer("low_stock_threshold").default(10).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const inventoryStockBatches = pgTable("inventory_stock_batches", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => inventoryItems.id, { onDelete: "cascade" }),
+  warehouseId: uuid("warehouse_id").notNull().references(() => inventoryWarehouses.id, { onDelete: "cascade" }),
+  batchNumber: varchar("batch_number", { length: 100 }).notNull(),
+  quantity: integer("quantity").notNull(),
+  expiryDate: timestamp("expiry_date"),
+  purchaseCostCents: integer("purchase_cost_cents").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  supplierId: uuid("supplier_id").notNull().references(() => inventorySuppliers.id, { onDelete: "cascade" }),
+  warehouseId: uuid("warehouse_id").notNull().references(() => inventoryWarehouses.id, { onDelete: "cascade" }),
+  poNumber: varchar("po_number", { length: 100 }).notNull().unique(),
+  status: varchar("status", { length: 50 }).default("Ordered").notNull(),
+  totalCents: integer("total_cents").notNull(),
+  items: jsonb("items").default([]).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const inventoryTransfers = pgTable("inventory_transfers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  itemId: uuid("item_id").notNull().references(() => inventoryItems.id, { onDelete: "cascade" }),
+  fromWarehouseId: uuid("from_warehouse_id").notNull().references(() => inventoryWarehouses.id, { onDelete: "cascade" }),
+  toWarehouseId: uuid("to_warehouse_id").notNull().references(() => inventoryWarehouses.id, { onDelete: "cascade" }),
+  quantity: integer("quantity").notNull(),
+  status: varchar("status", { length: 50 }).default("Completed").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// =========================================================================
+// CLINIC AI ENGINE TABLES
+// =========================================================================
+
+export const aiFeatures = pgTable("ai_features", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  featureKey: varchar("feature_key", { length: 100 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  requiresDoctorApproval: boolean("requires_doctor_approval").default(true).notNull(),
+  isEnabled: boolean("is_enabled").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const aiActions = pgTable("ai_actions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  patientId: uuid("patient_id").references(() => patients.id, { onDelete: "set null" }),
+  doctorId: uuid("doctor_id").references(() => staffProfiles.id, { onDelete: "set null" }),
+  featureKey: varchar("feature_key", { length: 100 }).notNull(),
+  promptSummary: text("prompt_summary").notNull(),
+  outputText: text("output_text").notNull(),
+  confidenceScore: doublePrecision("confidence_score").default(0.0).notNull(),
+  sources: jsonb("sources").default([]).notNull(),
+  medicalReferences: jsonb("medical_references").default([]).notNull(),
+  reviewRequired: boolean("review_required").default(true).notNull(),
+  doctorApprovalRequired: boolean("doctor_approval_required").default(true).notNull(),
+  doctorApprovedAt: timestamp("doctor_approved_at"),
+  patientVisible: boolean("patient_visible").default(false).notNull(),
+  status: varchar("status", { length: 50 }).default("PendingDoctorReview").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
