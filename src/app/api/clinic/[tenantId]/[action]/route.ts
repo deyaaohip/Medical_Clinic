@@ -4,6 +4,15 @@ import { authorizeTenant } from "@/lib/auth/tenant-access";
 
 const clinicService = new ClinicSaaSService();
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Ids reach the database, so reject malformed ones instead of failing the query. */
+const isInvalidRef = (value: unknown) =>
+  value !== undefined && value !== null && value !== "" && value !== "all" && !(typeof value === "string" && UUID_PATTERN.test(value));
+
+const invalidRefResponse = () =>
+  NextResponse.json({ success: false, error: "One of the selected records has an invalid identifier." }, { status: 400 });
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ tenantId: string; action: string }> }) {
   try {
     const { tenantId, action } = await params;
@@ -12,6 +21,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const searchParams = request.nextUrl.searchParams;
     const branchId = searchParams.get("branchId") || undefined;
+    if (isInvalidRef(branchId)) return invalidRefResponse();
 
     switch (action) {
       case "overview": {
@@ -40,6 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       case "appointments": {
         const status = searchParams.get("status") || undefined;
         const doctorId = searchParams.get("doctorId") || undefined;
+        if (isInvalidRef(doctorId)) return invalidRefResponse();
         const startStr = searchParams.get("startDate");
         const endStr = searchParams.get("endDate");
         const dateRange = startStr && endStr ? { start: new Date(startStr), end: new Date(endStr) } : undefined;
@@ -67,6 +78,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!access.ok) return access.response;
 
     const body = await request.json();
+
+    const refs = [body.branchId, body.patientId, body.doctorId, body.departmentId, body.sourcePatientId, body.targetPatientId];
+    if (refs.some(isInvalidRef)) return invalidRefResponse();
 
     switch (action) {
       case "patients": {
