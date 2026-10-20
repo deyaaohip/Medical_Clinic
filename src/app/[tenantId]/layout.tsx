@@ -1,5 +1,7 @@
 import * as React from "react";
+import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
+import { isTenantMember, resolveTenantId } from "@/lib/auth/tenant-access";
 import { getCurrentLocale } from "@/lib/i18n/engine";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { ClinicSaaSNavbar } from "@/components/clinic/ClinicSaaSNavbar";
@@ -15,6 +17,14 @@ export default async function ClinicPortalLayout({
   const locale = await getCurrentLocale();
   const resolvedParams = await params;
   const { tenantId } = resolvedParams;
+
+  // The portal is only reachable by signed-in members of the clinic
+  // (platform super admins may inspect any clinic).
+  if (!session) redirect("/");
+
+  const resolvedTenantId = await resolveTenantId(tenantId);
+  if (!resolvedTenantId) notFound();
+  if (!session.isSuperAdmin && !(await isTenantMember(resolvedTenantId, session.userId))) redirect("/");
 
   return (
     <div className={`min-h-screen bg-slate-100 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100 ${locale === "ar" ? "rtl" : "ltr"}`} dir={locale === "ar" ? "rtl" : "ltr"}>

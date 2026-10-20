@@ -20,23 +20,32 @@ import {
 } from "@/db/schema";
 import { eq, ne, and, or, ilike, desc, asc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 
+/** Raised when a request references a record that belongs to another clinic. */
+export class TenantOwnershipError extends Error {}
+
 export class ClinicSaaSService {
   // =========================================================================
   // 1. CLINIC MANAGEMENT SYSTEM (Multi-Branch Ready)
   // =========================================================================
-  async getTenantAndBranches(tenantId: string) {
-    const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, tenantId));
+  async getTenantAndBranches(slugOrId: string) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(slugOrId);
+    const [tenant] = await db
+      .select()
+      .from(tenants)
+      .where(isUuid ? eq(tenants.id, slugOrId) : eq(tenants.slug, slugOrId))
+      .limit(1);
+    if (!tenant) throw new Error("Clinic was not found.");
     const branches = await db
       .select()
       .from(clinicBranches)
-      .where(and(eq(clinicBranches.tenantId, tenant ? tenant.id : tenantId), isNull(clinicBranches.deletedAt)))
+      .where(and(eq(clinicBranches.tenantId, tenant.id), isNull(clinicBranches.deletedAt)))
       .orderBy(desc(clinicBranches.isPrimary), clinicBranches.name);
 
     return { tenant, branches };
   }
 
   async getStaffProfiles(tenantId: string, branchId?: string, staffType?: string) {
-    const conditions: any[] = [isNull(staffProfiles.deletedAt)];
+    const conditions: any[] = [eq(staffProfiles.tenantId, tenantId), isNull(staffProfiles.deletedAt)];
     if (branchId && branchId !== "all") conditions.push(eq(staffProfiles.branchId, branchId));
     if (staffType && staffType !== "all") conditions.push(eq(staffProfiles.staffType, staffType));
 
@@ -63,8 +72,8 @@ export class ClinicSaaSService {
   }
 
   async getDepartmentsAndRooms(tenantId: string, branchId?: string) {
-    const depConditions: any[] = [isNull(clinicDepartments.deletedAt)];
-    const roomConditions: any[] = [isNull(clinicRooms.deletedAt)];
+    const depConditions: any[] = [eq(clinicDepartments.tenantId, tenantId), isNull(clinicDepartments.deletedAt)];
+    const roomConditions: any[] = [eq(clinicRooms.tenantId, tenantId), isNull(clinicRooms.deletedAt)];
 
     if (branchId && branchId !== "all") {
       depConditions.push(eq(clinicDepartments.branchId, branchId));
@@ -89,7 +98,7 @@ export class ClinicSaaSService {
   }
 
   async getWorkingHours(tenantId: string, branchId?: string) {
-    const conditions: any[] = [];
+    const conditions: any[] = [eq(workingHours.tenantId, tenantId)];
     if (branchId && branchId !== "all") conditions.push(eq(workingHours.branchId, branchId));
 
     const results = await db
@@ -111,7 +120,7 @@ export class ClinicSaaSService {
   }
 
   async getVacations(tenantId: string, branchId?: string) {
-    const conditions: any[] = [isNull(vacationsHolidays.deletedAt)];
+    const conditions: any[] = [eq(vacationsHolidays.tenantId, tenantId), isNull(vacationsHolidays.deletedAt)];
     if (branchId && branchId !== "all") conditions.push(eq(vacationsHolidays.branchId, branchId));
 
     const results = await db
@@ -135,7 +144,7 @@ export class ClinicSaaSService {
   // 2. PATIENT MANAGEMENT SYSTEM
   // =========================================================================
   async getPatients(tenantId: string, branchId?: string, searchQuery: string = "") {
-    const conditions: any[] = [isNull(patients.deletedAt)];
+    const conditions: any[] = [eq(patients.tenantId, tenantId), isNull(patients.deletedAt)];
     if (branchId && branchId !== "all") conditions.push(eq(patients.branchId, branchId));
     if (searchQuery) {
       conditions.push(
@@ -157,8 +166,13 @@ export class ClinicSaaSService {
     return results;
   }
 
-  async getPatientComprehensiveRecord(patientId: string) {
-    const [patient] = await db.select().from(patients).where(eq(patients.id, patientId));
+  async getPatientComprehensiveRecord(tenantId: string, patientId: string) {
+    const [patient] = await db
+      .select()
+      .from(patients)
+      .where(and(eq(patients.id, patientId), eq(patients.tenantId, tenantId)));
+    if (!patient) return null;
+
     const [medical] = await db.select().from(patientMedicalRecords).where(eq(patientMedicalRecords.patientId, patientId));
     const [vitals] = await db.select().from(patientVitalSigns).where(eq(patientVitalSigns.patientId, patientId)).orderBy(desc(patientVitalSigns.recordedAt)).limit(1);
     const insurances = await db.select().from(patientInsurance).where(eq(patientInsurance.patientId, patientId));
@@ -183,7 +197,21 @@ export class ClinicSaaSService {
     };
   }
 
+  /** Confirms every referenced record belongs to the tenant before writing. */
+  private async assertTenantOwnership(tenantId: string, refs: { branchId?: string; patientId?: string; doctorId?: string; departmentId?: string }) {
+    const checks: Promise<{ id: string }[]>[] = [];
+    if (refs.branchId) checks.push(db.select({ id: clinicBranches.id }).from(clinicBranches).where(and(eq(clinicBranches.id, refs.branchId), eq(clinicBranches.tenantId, tenantId))));
+    if (refs.departmentId) checks.push(db.select({ id: clinicDepartments.id }).from(clinicDepartments).where(and(eq(clinicDepartments.id, refs.departmentId), eq(clinicDepartments.tenantId, tenantId))));
+    if (refs.patientId) checks.push(db.select({ id: patients.id }).from(patients).where(and(eq(patients.id, refs.patientId), eq(patients.tenantId, tenantId))));
+    if (refs.doctorId) checks.push(db.select({ id: staffProfiles.id }).from(staffProfiles).where(and(eq(staffProfiles.id, refs.doctorId), eq(staffProfiles.tenantId, tenantId))));
+    const results = await Promise.all(checks);
+    if (results.some((rows) => rows.length === 0)) {
+      throw new TenantOwnershipError("The selected patient, doctor, branch or department does not belong to this clinic.");
+    }
+  }
+
   async createPatient(data: any, tenantId: string, branchId: string) {
+    await this.assertTenantOwnership(tenantId, { branchId });
     const medicalRecordNumber = "MRN-2026-" + Math.floor(10000 + Math.random() * 90000);
     const [inserted] = await db
       .insert(patients)
@@ -247,6 +275,12 @@ export class ClinicSaaSService {
   async mergePatients(sourcePatientId: string, targetPatientId: string, tenantId: string) {
     if (sourcePatientId === targetPatientId) throw new Error("Cannot merge identical UUIDs.");
 
+    const owned = await db
+      .select({ id: patients.id })
+      .from(patients)
+      .where(and(inArray(patients.id, [sourcePatientId, targetPatientId]), eq(patients.tenantId, tenantId), isNull(patients.deletedAt)));
+    if (owned.length !== 2) throw new TenantOwnershipError("Both patients must belong to this clinic.");
+
     // Migrate medical notes, appointments, attachments, waiting list to target
     await db.update(appointments).set({ patientId: targetPatientId, updatedAt: new Date() }).where(eq(appointments.patientId, sourcePatientId));
     await db.update(patientAttachments).set({ patientId: targetPatientId }).where(eq(patientAttachments.patientId, sourcePatientId));
@@ -258,7 +292,7 @@ export class ClinicSaaSService {
     await db
       .update(patients)
       .set({ deletedAt: new Date(), isActive: false, tags: ["Merged Duplicate"] })
-      .where(eq(patients.id, sourcePatientId));
+      .where(and(eq(patients.id, sourcePatientId), eq(patients.tenantId, tenantId)));
 
     return { success: true, mergedTargetId: targetPatientId };
   }
@@ -267,7 +301,7 @@ export class ClinicSaaSService {
   // 3. APPOINTMENT MANAGEMENT SYSTEM
   // =========================================================================
   async getAppointments(tenantId: string, branchId?: string, dateRange?: { start: Date; end: Date }, status?: string, doctorId?: string) {
-    const conditions: any[] = [isNull(appointments.deletedAt)];
+    const conditions: any[] = [eq(appointments.tenantId, tenantId), isNull(appointments.deletedAt)];
     if (branchId && branchId !== "all") conditions.push(eq(appointments.branchId, branchId));
     if (status && status !== "all") conditions.push(eq(appointments.status, status));
     if (doctorId && doctorId !== "all") conditions.push(eq(appointments.doctorId, doctorId));
@@ -306,7 +340,7 @@ export class ClinicSaaSService {
   }
 
   async getLiveQueues(tenantId: string, branchId?: string) {
-    const conditions: any[] = [];
+    const conditions: any[] = [eq(waitingListQueues.tenantId, tenantId)];
     if (branchId && branchId !== "all") conditions.push(eq(waitingListQueues.branchId, branchId));
 
     const results = await db
@@ -335,6 +369,12 @@ export class ClinicSaaSService {
   }
 
   async createAppointment(data: any, tenantId: string, branchId: string) {
+    await this.assertTenantOwnership(tenantId, {
+      branchId,
+      patientId: data.patientId,
+      doctorId: data.doctorId,
+      departmentId: data.departmentId,
+    });
     const appointmentNumber = "APP-2026-" + Math.floor(100000 + Math.random() * 900000);
     const appointmentDate = new Date(data.appointmentDate || Date.now());
     const startTime = new Date(data.startTime || appointmentDate);
@@ -388,7 +428,7 @@ export class ClinicSaaSService {
     return inserted;
   }
 
-  async updateAppointmentStatus(appointmentId: string, status: string) {
+  async updateAppointmentStatus(tenantId: string, appointmentId: string, status: string) {
     const [updated] = await db
       .update(appointments)
       .set({
@@ -397,12 +437,14 @@ export class ClinicSaaSService {
         checkOutTime: status === "CheckedOut" || status === "Completed" ? new Date() : undefined,
         updatedAt: new Date(),
       })
-      .where(eq(appointments.id, appointmentId))
+      .where(and(eq(appointments.id, appointmentId), eq(appointments.tenantId, tenantId)))
       .returning();
+
+    if (!updated) return null;
 
     // If checked in, add to waiting queue if not present
     if (status === "CheckedIn" && updated) {
-      const existingQueue = await db.select().from(waitingListQueues).where(eq(waitingListQueues.appointmentId, appointmentId)).limit(1);
+      const existingQueue = await db.select().from(waitingListQueues).where(and(eq(waitingListQueues.appointmentId, appointmentId), eq(waitingListQueues.tenantId, tenantId))).limit(1);
       if (existingQueue.length === 0) {
         await db.insert(waitingListQueues).values({
           tenantId: updated.tenantId,
@@ -424,7 +466,7 @@ export class ClinicSaaSService {
       await db
         .update(waitingListQueues)
         .set({ status: "Completed", completedAt: new Date() })
-        .where(eq(waitingListQueues.appointmentId, appointmentId));
+        .where(and(eq(waitingListQueues.appointmentId, appointmentId), eq(waitingListQueues.tenantId, tenantId)));
     }
 
     return updated;

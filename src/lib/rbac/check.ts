@@ -7,12 +7,12 @@ const rbacService = new RbacService();
 export async function requirePermission(tenantId: string, requiredPermission: string) {
   const session = await getSession();
   if (!session) {
-    redirect("/login");
+    redirect("/");
   }
 
   const isAuthorized = await rbacService.verifyPermission(tenantId, session.userId, requiredPermission);
   if (!isAuthorized) {
-    redirect(`/${tenantId}/unauthorized`);
+    redirect("/");
   }
 
   return session;

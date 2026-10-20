@@ -2,9 +2,16 @@ import { db } from "@/db";
 import { tenants, patients, clinicBranches, staffProfiles, users, financialPackages, financialInvoices, financialPayments, financialRefunds, inventorySuppliers, inventoryWarehouses, inventoryItems, inventoryStockBatches, purchaseOrders, inventoryTransfers, aiFeatures, aiActions } from "@/db/schema";
 import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 
-async function tenantIdFromSlug(slug: string) {
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
-  return tenant?.id || slug;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function tenantIdFromSlug(slugOrId: string) {
+  const [tenant] = await db
+    .select({ id: tenants.id })
+    .from(tenants)
+    .where(UUID_PATTERN.test(slugOrId) ? eq(tenants.id, slugOrId) : eq(tenants.slug, slugOrId))
+    .limit(1);
+  if (!tenant) throw new Error("Clinic was not found.");
+  return tenant.id;
 }
 
 export class FinanceInventoryAIService {
@@ -105,5 +112,10 @@ export class FinanceInventoryAIService {
     return created;
   }
 
-  async approveAIAction(actionId: string) { const [updated] = await db.update(aiActions).set({ doctorApprovedAt: new Date(), status: "DoctorApproved", patientVisible: true }).where(eq(aiActions.id, actionId)).returning(); return updated; }
+  async approveAIAction(tenantSlug: string, actionId: string) {
+    const tenantId = await tenantIdFromSlug(tenantSlug);
+    const [updated] = await db.update(aiActions).set({ doctorApprovedAt: new Date(), status: "DoctorApproved", patientVisible: true }).where(and(eq(aiActions.id, actionId), eq(aiActions.tenantId, tenantId))).returning();
+    if (!updated) throw new Error("AI action was not found in this clinic.");
+    return updated;
+  }
 }
