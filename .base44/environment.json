@@ -1,0 +1,12 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/api/health",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "JWT_SECRET",
+      "description": "Signs the app's session JWTs. A development placeholder is committed in .env.base44-defaults; set a real value for anything beyond local preview.",
+      "requiredAtBoot": false
+    }
+  ]
+}

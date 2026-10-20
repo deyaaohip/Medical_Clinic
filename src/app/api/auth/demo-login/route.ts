@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { AuthService } from "@/core/application/AuthService";
+import { TenantRepository } from "@/infrastructure/db/TenantRepository";
 import { setSessionCookie } from "@/lib/auth/session";
 
 const authService = new AuthService();
+const tenantRepo = new TenantRepository();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(request: Request) {
   try {
@@ -16,7 +19,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "User account not found or inactive" }, { status: 404 });
     }
 
-    const token = await authService.createSessionToken(user, tenantId || null);
+    // The demo portal links use tenant slugs while sessions store tenant ids.
+    let activeTenantId: string | null = null;
+    if (tenantId) {
+      const tenant = UUID_PATTERN.test(tenantId)
+        ? await tenantRepo.findById(tenantId)
+        : await tenantRepo.findBySlug(tenantId);
+      activeTenantId = tenant?.id ?? null;
+    }
+
+    const token = await authService.createSessionToken(user, activeTenantId);
     await setSessionCookie(token);
 
     return NextResponse.json({ success: true, user, redirectUrl: user.isSuperAdmin ? "/super-admin" : `/${tenantId || "al-shifa"}/dashboard` });

@@ -7,6 +7,7 @@
 # Production dotenv
 .env*
 !.env.example
+!.env.base44-defaults
 
 # Custom files
 /tmp/
