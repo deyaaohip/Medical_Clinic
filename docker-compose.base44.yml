@@ -15,51 +15,10 @@ services:
       retries: 20
       start_period: 10s
 
-  # Installs dependencies from the repo's lockfile into the shared node_modules
-  # volume. Stamp-guarded so a plain restart never wipes node_modules under a
-  # running dev server.
-  deps:
-    image: node:22-bookworm-slim
-    working_dir: /app
-    restart: "no"
-    volumes:
-      - .:/app
-      - node_modules:/app/node_modules
-    command:
-      - sh
-      - -ec
-      - |
-        LOCK_HASH=$$(sha256sum package-lock.json | cut -d' ' -f1)
-        if [ ! -d node_modules/next ] || [ "$$(cat node_modules/.base44-lock 2>/dev/null)" != "$$LOCK_HASH" ]; then
-          echo "Installing dependencies with npm ci..."
-          npm ci --no-audit --no-fund
-          echo "$$LOCK_HASH" > node_modules/.base44-lock
-        else
-          echo "Dependencies already installed for current lockfile."
-        fi
-
-  # The repo ships no migration files; the schema is pushed from src/db/schema.ts.
-  # drizzle.config.json carries a masked URL, so the connection string is passed
-  # explicitly here.
-  migrate:
-    image: node:22-bookworm-slim
-    working_dir: /app
-    restart: "no"
-    depends_on:
-      db:
-        condition: service_healthy
-      deps:
-        condition: service_completed_successfully
-    volumes:
-      - .:/app
-      - node_modules:/app/node_modules
-    environment:
-      DATABASE_URL: postgresql://medsaas:medsaas_dev_password@db:5432/app_db
-    command:
-      - sh
-      - -ec
-      - exec npx drizzle-kit push --dialect=postgresql --schema=./src/db/schema.ts --url="$$DATABASE_URL" --force
-
+  # Single app service. On startup it (1) installs dependencies from the lockfile
+  # when they are missing or stale, (2) pushes the Drizzle schema (the repo ships
+  # no migration files) and (3) seeds demo data only into an empty database, then
+  # runs the Next.js dev server from the bind-mounted source.
   web:
     image: node:22-bookworm-slim
     working_dir: /app
@@ -67,10 +26,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      deps:
-        condition: service_completed_successfully
-      migrate:
-        condition: service_completed_successfully
     volumes:
       - .:/app
       - node_modules:/app/node_modules
@@ -84,42 +39,36 @@ services:
       - NEXT_TELEMETRY_DISABLED=1
       - BASE44_PREVIEW_MODE
       - BASE44_PUBLIC_HOST_SUFFIX
-    command: ["sh", "-ec", "exec npx next dev --hostname 0.0.0.0 --port 3000"]
+    command:
+      - sh
+      - -ec
+      - |
+        LOCK_HASH=$$(sha256sum package-lock.json | cut -d' ' -f1)
+        if [ ! -d node_modules/next ] || [ "$$(cat node_modules/.base44-lock 2>/dev/null)" != "$$LOCK_HASH" ]; then
+          echo "Installing dependencies with npm ci..."
+          npm ci --no-audit --no-fund
+          echo "$$LOCK_HASH" > node_modules/.base44-lock
+        else
+          echo "Dependencies already installed for current lockfile."
+        fi
+
+        echo "Pushing database schema..."
+        npx drizzle-kit push --dialect=postgresql --schema=./src/db/schema.ts --url="$$DATABASE_URL" --force
+
+        if node -e 'const {Pool}=require("pg");const p=new Pool({connectionString:process.env.DATABASE_URL});p.query("select count(*)::int as n from tenants").then(r=>{console.log("tenants already present: "+r.rows[0].n);process.exit(r.rows[0].n>0?0:1)}).catch(e=>{console.error("seed check:",e.message);process.exit(1)})'; then
+          echo "Database already seeded - skipping."
+        else
+          echo "Empty database - seeding demo data..."
+          npx tsx src/db/runSeedScript.ts
+        fi
+
+        exec npx next dev --hostname 0.0.0.0 --port 3000
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 90s
-
-  # Seeds demo clinics/users through the app's own /api/debug/seed route, but
-  # only when the database is still empty so restarts never duplicate data.
-  seed:
-    image: node:22-bookworm-slim
-    working_dir: /app
-    restart: "no"
-    depends_on:
-      db:
-        condition: service_healthy
-      deps:
-        condition: service_completed_successfully
-      web:
-        condition: service_healthy
-    volumes:
-      - .:/app
-      - node_modules:/app/node_modules
-    environment:
-      DATABASE_URL: postgresql://medsaas:medsaas_dev_password@db:5432/app_db
-    command:
-      - sh
-      - -ec
-      - |
-        if node -e 'const {Pool}=require("pg");const p=new Pool({connectionString:process.env.DATABASE_URL});p.query("select count(*)::int as n from tenants").then(r=>{console.log("tenants already present: "+r.rows[0].n);process.exit(r.rows[0].n>0?0:1)}).catch(e=>{console.error("seed check:",e.message);process.exit(1)})'; then
-          echo "Database already seeded - skipping."
-        else
-          echo "Empty database - seeding demo data..."
-          node -e 'fetch("http://web:3000/api/debug/seed",{method:"POST"}).then(r=>r.text()).then(t=>{console.log(t);process.exit(0)}).catch(e=>{console.error(e);process.exit(1)})'
-        fi
+      start_period: 180s
 
 volumes:
   pgdata:

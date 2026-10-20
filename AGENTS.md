@@ -6,34 +6,46 @@ Read this before changing the run setup.
 ## Running the app
 
 ```bash
-docker compose -f docker-compose.base44.yml up -d          # db + deps + migrate, then web + seed
+docker compose -f docker-compose.base44.yml up -d --remove-orphans
 docker compose -f docker-compose.base44.yml ps
 curl -s http://localhost:3000/api/health                   # {"ok":true}
 ```
 
-- The preview is Next.js 16 in **dev mode** (`next dev`, Turbopack) on host port 3000,
-  bind-mounting the repo, so edits apply without rebuilding.
-- `node_modules` lives in the `node_modules` Docker volume. The `deps` service runs
-  `npm ci` only when `package-lock.json` changed (stamp file `node_modules/.base44-lock`),
-  so a plain restart never wipes dependencies under the running dev server.
-  After editing `package.json`/`package-lock.json`, force it:
-  `docker compose -f docker-compose.base44.yml up -d --force-recreate deps web`
-- Postgres 16 runs as the `db` service; credentials are inline in the compose file
-  (local infra only). Data persists in the `pgdata` volume.
+- Two services only: `db` (Postgres 16) and `web` (Next.js 16 dev server, Turbopack).
+  Both are long-running and healthchecked; there are no one-shot containers.
+- `web` is a plain `node:22-bookworm-slim` image with the repo bind-mounted, so edits
+  apply without rebuilding. Host port 3000 is the preview entry point.
+- Postgres credentials are inline in the compose file (local infra only); data persists
+  in the `pgdata` volume.
 
-## Database: schema is pushed, not migrated
+## Startup sequence inside the `web` service
 
-- The repo has **no migration files** (`*.sql` is gitignored). The `migrate` service
-  runs `drizzle-kit push` from `src/db/schema.ts` before the web app starts.
-- `drizzle.config.json` contains a **masked** connection string, so the URL is passed
-  explicitly with `--url="$DATABASE_URL"`.
-- Demo data is seeded through the app's own `POST /api/debug/seed` route by the `seed`
-  service. It first counts rows in `tenants` and **skips when the DB is already seeded** —
-  the seed script itself inserts timestamped orders, so re-running it duplicates data.
-  To intentionally reseed, empty the database first (do not drop the volume casually).
-- Seeded personas (all use the mock password, demo login needs none):
+The container command does everything setup-related before `exec next dev`, which keeps
+every container long-running (an exited one-shot job looks like a failure to the
+platform health check):
+
+1. `npm ci` from the lockfile — **only** when `node_modules` is missing or when
+   `package-lock.json` no longer matches the stamp in `node_modules/.base44-lock`.
+   A plain restart therefore never wipes dependencies under a running dev server.
+   After editing `package.json`/`package-lock.json`, just restart `web`; the stamp
+   check reinstalls. Force it with
+   `docker compose -f docker-compose.base44.yml up -d --force-recreate web`.
+2. `drizzle-kit push` from `src/db/schema.ts` — the repo ships **no migration files**
+   (`*.sql` is gitignored), so the schema is pushed. `drizzle.config.json` contains a
+   **masked** URL, hence `--url="$DATABASE_URL"` is passed explicitly.
+3. Seeding through `npx tsx src/db/runSeedScript.ts`, guarded by a row count on
+   `tenants`: it runs **only into an empty database**. The seed inserts timestamped
+   orders, so re-running it on populated data duplicates records.
+   `tsx` comes from the lockfile (transitive via drizzle-kit), so no extra dependency.
+4. `next dev --hostname 0.0.0.0 --port 3000`.
+
+## Database and demo data
+
+- Seeded personas (demo login needs no password; all use the mock hash):
   `admin@medsaas.com` (super admin), `dr.ahmed@alshifaclinic.ae`,
-  `reception@alshifaclinic.ae`, `dr.sarah@apexhealth.com`; tenant slugs `al-shifa`, `apex-health`.
+  `reception@alshifaclinic.ae`, `dr.sarah@apexhealth.com`.
+  Tenant slugs: `al-shifa`, `apex-health`.
+- Do not add another seeding container: seeding is idempotent by the guard above.
 
 ## Preview-only configuration
 
@@ -50,7 +62,9 @@ curl -s http://localhost:3000/api/health                   # {"ok":true}
 - Home `/` lists subscription plans and demo persona cards (needs seeded data).
 - Demo login: "Launch Super Admin Console" → `/super-admin`; "Enter Physician Persona"
   → `/al-shifa/dashboard`; sidebar "Master Patient" → `/al-shifa/patients`.
-- `npm run typecheck` / `npm run lint` are available inside the `web` container
-  (`docker compose -f docker-compose.base44.yml exec web npx tsc --noEmit`).
-- Known fixed quirk: `/api/auth/demo-login` receives tenant **slugs** from the UI but
-  sessions store tenant **UUIDs**; the route resolves slug-or-id before signing the token.
+- Typecheck / lint inside the container:
+  `docker compose -f docker-compose.base44.yml exec web npx tsc --noEmit`.
+- Fixed quirk worth knowing: `/api/auth/demo-login` receives tenant **slugs** from the UI
+  but sessions store tenant **UUIDs**; the route resolves slug-or-id before signing the
+  token. Passing the raw slug into the session used to raise
+  `invalid input syntax for type uuid`.
