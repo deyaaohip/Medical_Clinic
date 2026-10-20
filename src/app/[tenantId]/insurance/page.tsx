@@ -8,6 +8,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageShell } from "@/components/clinic/ui/page-shell";
+import { PageHeader } from "@/components/clinic/ui/page-header";
+import { StatCard } from "@/components/clinic/ui/stat-card";
+import { LoadingBlock } from "@/components/clinic/ui/state-blocks";
 import {
   AlertTriangle,
   BadgeDollarSign,
@@ -96,13 +100,44 @@ export default function InsuranceManagementPage({ params }: { params: Promise<{ 
     setDecision({ approvedAmountCents: String(target.approvedAmountCents || target.coveredAmountCents || target.requestedAmountCents || ""), externalReference: target.externalReference || "", rejectionCode: target.rejectionCode || "", rejectionReason: target.rejectionReason || "", reviewNotes: "" });
   };
 
-  if (loading || !data) return <div className="flex justify-center p-24"><Loader2 className="h-9 w-9 animate-spin text-violet-600" /></div>;
+  if (loading || !data) {
+    return (
+      <PageShell>
+        <LoadingBlock label="Loading payer data" />
+      </PageShell>
+    );
+  }
 
   return (
-    <div className="space-y-6 p-6">
-      <section className="rounded-3xl bg-gradient-to-r from-violet-950 via-slate-950 to-emerald-950 p-7 text-white shadow-xl print:hidden"><div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><Badge className="mb-3 bg-violet-400/15 text-violet-200">Revenue cycle & payer gateway</Badge><h1 className="flex items-center gap-3 text-3xl font-black"><ShieldCheck className="h-8 w-8 text-emerald-300" />Insurance Management</h1><p className="mt-2 max-w-2xl text-sm text-slate-300">Eligibility, coverage, authorization, billing rules, claims, rejection resolution, resubmission, invoices and co-payments.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/10" onClick={() => openCreate("authorization")}>Authorization</Button><Button onClick={() => openCreate("claim")} className="bg-emerald-400 font-black text-slate-950 hover:bg-emerald-300"><Plus className="mr-2 h-4 w-4" />New claim</Button></div></div></section>
+    <PageShell>
+      <PageHeader
+        icon={ShieldCheck}
+        eyebrow="Revenue cycle & payer gateway"
+        title="Insurance management"
+        description="Eligibility, coverage, authorisation, billing rules, claims, rejection resolution, resubmission, invoices and co-payments."
+        actions={
+          <>
+            <Button variant="outline" size="sm" className="h-9 px-4 text-xs font-medium" onClick={() => openCreate("authorization")}>
+              Authorization
+            </Button>
+            <Button
+              size="sm"
+              className="h-9 gap-1.5 bg-teal-600 px-4 text-xs font-semibold shadow-sm hover:bg-teal-700"
+              onClick={() => openCreate("claim")}
+            >
+              <Plus className="h-4 w-4" />
+              New claim
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 print:hidden"><Metric label="Submitted charges" value={money(submittedTotal)} icon={BadgeDollarSign} color="text-violet-600" /><Metric label="Approved revenue" value={money(approvedTotal)} icon={CheckCircle2} color="text-emerald-600" /><Metric label="Patient co-payment" value={money(copayTotal)} icon={CircleDollarSign} color="text-cyan-600" /><Metric label="Rejected claims" value={rejected.length} icon={FileWarning} color="text-rose-600" /></div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Submitted charges" value={money(submittedTotal)} hint="All claims raised" icon={BadgeDollarSign} tone="teal" />
+        <StatCard label="Approved revenue" value={money(approvedTotal)} hint="Payer accepted" icon={CheckCircle2} tone="emerald" />
+        <StatCard label="Patient co-payment" value={money(copayTotal)} hint="Collected at desk" icon={CircleDollarSign} tone="cyan" />
+        <StatCard label="Rejected claims" value={rejected.length} hint="Needing resubmission" icon={FileWarning} tone="rose" />
+      </div>
 
       <Tabs defaultValue="claims">
         <TabsList className="h-auto flex-wrap print:hidden"><TabsTrigger value="claims">Claims</TabsTrigger><TabsTrigger value="authorizations">Authorizations</TabsTrigger><TabsTrigger value="policies">Policies & coverage</TabsTrigger><TabsTrigger value="payers">Companies & plans</TabsTrigger><TabsTrigger value="invoices">Invoices</TabsTrigger><TabsTrigger value="rules">Billing rules</TabsTrigger><TabsTrigger value="reports">Insurance reports</TabsTrigger></TabsList>
@@ -125,11 +160,10 @@ export default function InsuranceManagementPage({ params }: { params: Promise<{ 
       <Dialog open={entityType !== null} onOpenChange={() => setEntityType(null)}><DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>Create {entityType}</DialogTitle><DialogDescription>Add a dynamic revenue-cycle record to the tenant-isolated payer workflow.</DialogDescription></DialogHeader><form onSubmit={create} className="space-y-4">{entityType === "company" && <div className="grid gap-4 sm:grid-cols-2"><Field label="Company name" value={form.name} set={(v) => setForm({ ...form, name: v })} /><Field label="Payer code" value={form.payerCode} set={(v) => setForm({ ...form, payerCode: v })} /><Field label="Electronic payer ID" value={form.electronicPayerId} set={(v) => setForm({ ...form, electronicPayerId: v })} /><Field label="Claims email" value={form.email} set={(v) => setForm({ ...form, email: v })} /></div>}{entityType === "plan" && <div className="grid gap-4 sm:grid-cols-2"><Select label="Insurance company" value={form.insuranceCompanyId} onChange={(v) => setForm({ ...form, insuranceCompanyId: v })} options={data.companies.map((x: any) => [x.id, x.name])} /><Field label="Plan name" value={form.name} set={(v) => setForm({ ...form, name: v })} /><Field label="Plan code" value={form.planCode} set={(v) => setForm({ ...form, planCode: v })} /><Field label="Network tier" value={form.networkTier} set={(v) => setForm({ ...form, networkTier: v })} /><Field label="Coverage %" value={String(form.defaultCoveragePercent)} set={(v) => setForm({ ...form, defaultCoveragePercent: Number(v) })} type="number" /><Field label="Co-pay (cents)" value={String(form.defaultCoPaymentCents)} set={(v) => setForm({ ...form, defaultCoPaymentCents: Number(v) })} type="number" /></div>}{entityType === "policy" && <div className="grid gap-4 sm:grid-cols-2"><Select label="Patient" value={form.patientId} onChange={(v) => { const patient = data.patients.find((x: any) => x.id === v); setForm({ ...form, patientId: v, holderName: patient?.fullName || "" }); }} options={data.patients.map((x: any) => [x.id, x.fullName])} /><Select label="Company" value={form.insuranceCompanyId} onChange={(v) => setForm({ ...form, insuranceCompanyId: v })} options={data.companies.map((x: any) => [x.id, x.name])} /><Select label="Plan" value={form.insurancePlanId} onChange={(v) => setForm({ ...form, insurancePlanId: v })} options={data.plans.map((x: any) => [x.id, x.name])} /><Field label="Policy number" value={form.policyNumber} set={(v) => setForm({ ...form, policyNumber: v })} /><Field label="Member ID" value={form.memberId} set={(v) => setForm({ ...form, memberId: v })} /><Field label="Holder name" value={form.holderName} set={(v) => setForm({ ...form, holderName: v })} /><Field label="Coverage start" value={form.coverageStart} set={(v) => setForm({ ...form, coverageStart: v })} type="date" /><Field label="Coverage end" value={form.coverageEnd} set={(v) => setForm({ ...form, coverageEnd: v })} type="date" /></div>}{entityType === "authorization" && <div className="grid gap-4 sm:grid-cols-2"><Select label="Patient policy" value={form.patientPolicyId} onChange={(v) => { const p = data.policies.find((x: any) => x.id === v); setForm({ ...form, patientPolicyId: v, patientId: p?.patientId }); }} options={data.policies.map((x: any) => [x.id, `${x.patientName} • ${x.companyName}`])} /><Field label="Service type" value={form.serviceType} set={(v) => setForm({ ...form, serviceType: v })} /><Field label="Requested amount (cents)" value={String(form.requestedAmountCents)} set={(v) => setForm({ ...form, requestedAmountCents: Number(v) })} type="number" /><Field label="Expires" value={form.expiresAt} set={(v) => setForm({ ...form, expiresAt: v })} type="date" /></div>}{entityType === "claim" && <div className="space-y-4"><Select label="Patient policy" value={form.patientPolicyId} onChange={(v) => setForm({ ...form, patientPolicyId: v })} options={data.policies.map((x: any) => [x.id, `${x.patientName} • ${x.planName}`])} /><div className="grid gap-4 sm:grid-cols-2"><Field label="Service code" value={form.items?.[0]?.serviceCode} set={(v) => setForm({ ...form, items: [{ ...form.items[0], serviceCode: v }] })} /><Field label="Description" value={form.items?.[0]?.description} set={(v) => setForm({ ...form, items: [{ ...form.items[0], description: v }] })} /><Field label="Quantity" value={String(form.items?.[0]?.quantity)} set={(v) => setForm({ ...form, items: [{ ...form.items[0], quantity: Number(v) }] })} type="number" /><Field label="Unit price (cents)" value={String(form.items?.[0]?.unitPriceCents)} set={(v) => setForm({ ...form, items: [{ ...form.items[0], unitPriceCents: Number(v) }] })} type="number" /></div><Field label="Supporting attachment URL" value={form.attachmentUrl} set={(v) => setForm({ ...form, attachmentUrl: v })} /></div>}<DialogFooter><Button type="button" variant="outline" onClick={() => setEntityType(null)}>Cancel</Button><Button disabled={submitting}>{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save record"}</Button></DialogFooter></form></DialogContent></Dialog>
 
       <Dialog open={actionTarget !== null} onOpenChange={() => setActionTarget(null)}><DialogContent><DialogHeader><DialogTitle>{actionType} {actionTarget?.authorizationNumber ? "authorization" : "claim"}</DialogTitle><DialogDescription>Record a payer decision with a complete audit trail.</DialogDescription></DialogHeader><div className="space-y-4">{["approve"].includes(actionType) && <Field label="Approved amount (cents)" value={decision.approvedAmountCents} set={(v) => setDecision({ ...decision, approvedAmountCents: v })} type="number" />}{actionTarget?.authorizationNumber && <Field label="External payer reference" value={decision.externalReference} set={(v) => setDecision({ ...decision, externalReference: v })} />}{["reject"].includes(actionType) && <><Field label="Rejection code" value={decision.rejectionCode} set={(v) => setDecision({ ...decision, rejectionCode: v })} /><div><Label className="text-xs font-bold">Rejection reason</Label><textarea rows={3} value={decision.rejectionReason} onChange={(e) => setDecision({ ...decision, rejectionReason: e.target.value })} className="mt-1 w-full rounded-xl border bg-transparent p-3 text-xs dark:border-slate-700" /></div></>}</div><DialogFooter><Button variant="outline" onClick={() => setActionTarget(null)}>Cancel</Button><Button onClick={transition} disabled={submitting}>{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm transition"}</Button></DialogFooter></DialogContent></Dialog>
-    </div>
+    </PageShell>
   );
 }
 
-function Metric({ label, value, icon: Icon, color }: any) { return <Card><CardContent className="flex items-center justify-between p-5"><div><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></div><Icon className={`h-8 w-8 ${color}`} /></CardContent></Card>; }
 function Status({ status }: { status: string }) { const variant = ["Approved", "Paid", "Active"].includes(status) ? "success" : status === "Rejected" ? "destructive" : ["Pending", "Open", "Submitted", "Resubmitted"].includes(status) ? "warning" : "secondary"; return <Badge variant={variant as any}>{status}</Badge>; }
 function MoneyBox({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800"><p className="text-[9px] font-black uppercase text-slate-400">{label}</p><p className="mt-1 text-xs font-black">{value}</p></div>; }
 function Field({ label, value, set, type = "text" }: { label: string; value: string; set: (v: string) => void; type?: string }) { return <div><Label className="text-xs font-bold">{label}</Label><Input type={type} className="mt-1" value={value || ""} onChange={(e) => set(e.target.value)} /></div>; }

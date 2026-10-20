@@ -4,6 +4,9 @@ import * as React from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/clinic/ui/page-header";
+import { StatCard } from "@/components/clinic/ui/stat-card";
+import { LoadingBlock } from "@/components/clinic/ui/state-blocks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -156,20 +159,33 @@ export default function PrescriptionManagementPage({ params }: { params: Promise
   const criticalWarnings = warnings.filter((warning) => warning.level === "critical");
 
   return (
-    <div className="space-y-6 p-6">
-      <section className="rounded-3xl bg-gradient-to-r from-indigo-950 via-slate-950 to-teal-950 p-7 text-white shadow-xl print:hidden">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between"><div><Badge className="mb-3 bg-cyan-400/15 text-cyan-200">Medication safety engine</Badge><h1 className="flex items-center gap-3 text-3xl font-black"><Pill className="h-8 w-8 text-cyan-300" /> Prescription Management</h1><p className="mt-2 max-w-2xl text-sm text-slate-300">Electronic prescribing with allergy checks, interactions, generic alternatives, refills, signatures and QR verification.</p></div><Button onClick={() => setCreateOpen(true)} className="h-11 bg-cyan-400 px-6 font-black text-slate-950 hover:bg-cyan-300"><Plus className="mr-2 h-4 w-4" />New prescription</Button></div>
-      </section>
+    <div className="mx-auto w-full max-w-[1600px] space-y-8 px-5 py-6 sm:px-6 lg:px-8 lg:py-8 print:p-0">
+      <PageHeader
+        icon={Pill}
+        eyebrow="Medication safety engine"
+        title="Prescription management"
+        description="Electronic prescribing with allergy checks, interaction warnings, generic alternatives, refills, signatures and QR verification."
+        actions={
+          <Button
+            onClick={() => setCreateOpen(true)}
+            size="sm"
+            className="h-9 gap-1.5 bg-teal-600 px-4 text-xs font-semibold shadow-sm hover:bg-teal-700 print:hidden"
+          >
+            <Plus className="h-4 w-4" />
+            New prescription
+          </Button>
+        }
+      />
 
-      <div className="grid gap-4 sm:grid-cols-3 print:hidden">
-        <Metric label="Prescription history" value={prescriptions.length} icon={History} color="text-indigo-600" />
-        <Metric label="Active prescriptions" value={activeCount} icon={CheckCircle2} color="text-emerald-600" />
-        <Metric label="Medicine database" value={context?.medicines?.length || 0} icon={Pill} color="text-cyan-600" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 print:hidden">
+        <StatCard label="Prescription history" value={prescriptions.length} hint="All issued" icon={History} tone="teal" />
+        <StatCard label="Active prescriptions" value={activeCount} hint="Refillable" icon={CheckCircle2} tone="emerald" />
+        <StatCard label="Medicine database" value={context?.medicines?.length || 0} hint="Formularies" icon={Pill} tone="cyan" />
       </div>
 
       <div className="flex items-center justify-between gap-3 rounded-2xl border bg-white p-4 dark:border-slate-800 dark:bg-slate-900 print:hidden"><div className="relative w-full max-w-xl"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search patient, prescription or diagnosis..." /></div><Badge variant="outline">{filtered.length} results</Badge></div>
 
-      {loading ? <div className="flex justify-center p-20"><Loader2 className="h-8 w-8 animate-spin text-cyan-600" /></div> : <div className="grid gap-4 xl:grid-cols-2 print:hidden">{filtered.map((rx) => <Card key={rx.id} className="overflow-hidden hover:border-cyan-400 hover:shadow-lg"><CardHeader className="pb-3"><div className="flex justify-between gap-3"><div><CardTitle>{rx.patientName}</CardTitle><CardDescription className="mt-1 font-mono">{rx.prescriptionNumber} • {rx.patientMrn}</CardDescription></div><Badge variant={rx.status === "Active" ? "success" : "secondary"}>{rx.status}</Badge></div></CardHeader><CardContent className="space-y-4"><p className="rounded-xl bg-slate-50 p-3 text-sm font-semibold dark:bg-slate-800/60">{rx.diagnosis || "No diagnosis supplied"}</p><div className="space-y-2">{rx.items.map((item: any) => <div key={item.id} className="flex items-center justify-between rounded-xl border p-3 text-xs dark:border-slate-800"><div><p className="font-black">{item.medicine.brandName} <span className="font-normal text-slate-500">({item.medicine.genericName})</span></p><p className="mt-1 text-slate-500">{item.dosage} • {item.frequency} • {item.duration}</p></div><Badge variant="outline">{item.refillsAllowed - item.refillsUsed} refills</Badge></div>)}</div><div className="flex flex-wrap gap-2"><Button variant="outline" className="flex-1 font-bold" onClick={() => setDetail(rx)}>View & QR</Button><Button className="font-bold" disabled={submitting} onClick={() => refill(rx.id)}><RefreshCw className="mr-2 h-4 w-4" />Refill</Button></div></CardContent></Card>)}</div>}
+      {loading ? <LoadingBlock label="Loading prescriptions" /> : <div className="grid gap-4 xl:grid-cols-2 print:hidden">{filtered.map((rx) => <Card key={rx.id} className="overflow-hidden hover:border-cyan-400 hover:shadow-lg"><CardHeader className="pb-3"><div className="flex justify-between gap-3"><div><CardTitle>{rx.patientName}</CardTitle><CardDescription className="mt-1 font-mono">{rx.prescriptionNumber} • {rx.patientMrn}</CardDescription></div><Badge variant={rx.status === "Active" ? "success" : "secondary"}>{rx.status}</Badge></div></CardHeader><CardContent className="space-y-4"><p className="rounded-xl bg-slate-50 p-3 text-sm font-semibold dark:bg-slate-800/60">{rx.diagnosis || "No diagnosis supplied"}</p><div className="space-y-2">{rx.items.map((item: any) => <div key={item.id} className="flex items-center justify-between rounded-xl border p-3 text-xs dark:border-slate-800"><div><p className="font-black">{item.medicine.brandName} <span className="font-normal text-slate-500">({item.medicine.genericName})</span></p><p className="mt-1 text-slate-500">{item.dosage} • {item.frequency} • {item.duration}</p></div><Badge variant="outline">{item.refillsAllowed - item.refillsUsed} refills</Badge></div>)}</div><div className="flex flex-wrap gap-2"><Button variant="outline" className="flex-1 font-bold" onClick={() => setDetail(rx)}>View & QR</Button><Button className="font-bold" disabled={submitting} onClick={() => refill(rx.id)}><RefreshCw className="mr-2 h-4 w-4" />Refill</Button></div></CardContent></Card>)}</div>}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-h-[94vh] max-w-4xl overflow-y-auto p-0">
@@ -197,6 +213,5 @@ export default function PrescriptionManagementPage({ params }: { params: Promise
   );
 }
 
-function Metric({ label, value, icon: Icon, color }: any) { return <Card><CardContent className="flex items-center justify-between p-5"><div><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 text-3xl font-black">{value}</p></div><Icon className={`h-8 w-8 ${color}`} /></CardContent></Card>; }
 function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[][] }) { return <div><Label className="text-xs font-bold">{label}</Label><select className="mt-1 h-9 w-full rounded-md border bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={value} onChange={(e) => onChange(e.target.value)}>{options.map(([id, text]) => <option value={id} key={`${label}-${id}`}>{text}</option>)}</select></div>; }
 function SmallInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) { return <div><Label className="text-[10px] font-bold uppercase text-slate-500">{label}</Label><Input type={type} className="mt-1 h-8 text-xs" value={value} onChange={(e) => onChange(e.target.value)} /></div>; }

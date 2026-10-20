@@ -1,18 +1,123 @@
 "use client";
+
 import * as React from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertTriangle, Boxes, Package, Plus, RefreshCw, Search, Warehouse } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AlertTriangle, Barcode, Boxes, Loader2, Package, Plus, QrCode, RefreshCw, Truck, Warehouse } from "lucide-react";
+import { PageShell } from "@/components/clinic/ui/page-shell";
+import { PageHeader } from "@/components/clinic/ui/page-header";
+import { StatCard } from "@/components/clinic/ui/stat-card";
+import { LoadingBlock } from "@/components/clinic/ui/state-blocks";
+import { StockList } from "@/components/clinic/inventory/stock-list";
+import { SuppliersPanel } from "@/components/clinic/inventory/suppliers-panel";
+import { OrdersPanel } from "@/components/clinic/inventory/orders-panel";
+import { CreateItemDialog, type StockDraft } from "@/components/clinic/inventory/create-item-dialog";
 
 export default function InventoryPage({ params }: { params: Promise<{ tenantId: string }> }) {
-  const [tenantId,setTenantId]=React.useState("al-shifa"); const [metrics,setMetrics]=React.useState<any>({}); const [stock,setStock]=React.useState<any[]>([]); const [suppliers,setSuppliers]=React.useState<any[]>([]); const [warehouses,setWarehouses]=React.useState<any[]>([]); const [pos,setPos]=React.useState<any[]>([]); const [transfers,setTransfers]=React.useState<any[]>([]); const [search,setSearch]=React.useState(""); const [loading,setLoading]=React.useState(true); const [modal,setModal]=React.useState(false);
-  const [form,setForm]=React.useState({itemType:"Medicine",name:"Insulin Glargine",sku:"MED-INS-001",unit:"pen",lowStockThreshold:15});
-  React.useEffect(()=>{params.then(p=>setTenantId(p.tenantId));},[params]);
-  const load=React.useCallback(async()=>{setLoading(true); const qs=new URLSearchParams({search}); const [m,s,sup,wh,po,tr]=await Promise.all([fetch(`/api/operations/${tenantId}/inventory-dashboard`).then(r=>r.json()),fetch(`/api/operations/${tenantId}/stock?${qs}`).then(r=>r.json()),fetch(`/api/operations/${tenantId}/suppliers`).then(r=>r.json()),fetch(`/api/operations/${tenantId}/warehouses`).then(r=>r.json()),fetch(`/api/operations/${tenantId}/purchase-orders`).then(r=>r.json()),fetch(`/api/operations/${tenantId}/transfers`).then(r=>r.json())]); if(m.success)setMetrics(m.metrics); if(s.success)setStock(s.data||[]); if(sup.success)setSuppliers(sup.data||[]); if(wh.success)setWarehouses(wh.data||[]); if(po.success)setPos(po.data||[]); if(tr.success)setTransfers(tr.data||[]); setLoading(false);},[tenantId,search]); React.useEffect(()=>{load();},[load]);
-  async function create(e:React.FormEvent){e.preventDefault(); const res=await fetch(`/api/operations/${tenantId}/stock`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)}); const d=await res.json(); if(d.success){setModal(false);load();alert("Inventory item created with barcode and QR.");}}
-  return <div className="p-6 space-y-6"><div className="flex justify-between bg-white dark:bg-slate-900 border rounded-2xl p-6"><div><h1 className="text-2xl font-black flex gap-2"><Package className="text-teal-600"/> Inventory Module</h1><p className="text-xs text-slate-500">Medicines, supplies, purchase orders, suppliers, stock, expiry, barcode, QR, warehouses, transfers and alerts.</p></div><div className="flex gap-2"><Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search SKU/barcode..."/><Button onClick={()=>setModal(true)} className="bg-teal-600"><Plus className="w-4 h-4 mr-1"/>Item</Button></div></div><div className="grid grid-cols-2 md:grid-cols-4 gap-4">{[{l:"Items",v:metrics.items,i:Boxes},{l:"Stock",v:metrics.stock,i:Warehouse},{l:"Low Stock",v:metrics.lowStock,i:AlertTriangle},{l:"Expiring",v:metrics.expiringSoon,i:RefreshCw}].map(x=>{const I=x.i;return <Card key={x.l}><CardContent className="p-5 flex justify-between"><div><p className="text-xs font-black text-slate-500">{x.l}</p><p className="text-2xl font-black">{x.v||0}</p></div><I className="text-teal-600"/></CardContent></Card>})}</div>{loading?<Loader2 className="animate-spin"/>:<div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Card className="lg:col-span-2"><CardHeader><CardTitle>Stock & Batch Numbers</CardTitle></CardHeader><CardContent className="space-y-3">{stock.map(i=><div key={i.id} className="p-4 border rounded-2xl"><div className="flex justify-between"><div><p className="font-black">{i.name}</p><p className="text-xs font-mono text-slate-500">{i.sku} • {i.itemType}</p></div><Badge variant={i.totalQuantity<=i.lowStockThreshold?"destructive":"success"}>{i.totalQuantity} {i.unit}</Badge></div><div className="mt-3 flex gap-2 flex-wrap"><Badge variant="outline"><Barcode className="w-3 h-3 mr-1"/>{i.barcode}</Badge><Badge variant="outline"><QrCode className="w-3 h-3 mr-1"/>{i.qrCode}</Badge>{i.batches?.map((b:any)=><Badge key={b.id} variant="secondary">Batch {b.batchNumber}</Badge>)}</div>{i.totalQuantity<=i.lowStockThreshold&&<div className="mt-3 p-2 bg-rose-50 text-rose-700 rounded text-xs font-bold">Low stock alert: reorder required.</div>}</div>)}</CardContent></Card><Card><CardHeader><CardTitle>Suppliers / Warehouses</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-xs font-black">Suppliers</p>{suppliers.map(s=><div key={s.id} className="p-2 border rounded text-xs"><Truck className="inline w-3 h-3 mr-1"/>{s.name}</div>)}<p className="text-xs font-black pt-3">Warehouses</p>{warehouses.map(w=><div key={w.id} className="p-2 border rounded text-xs"><Warehouse className="inline w-3 h-3 mr-1"/>{w.name}</div>)}</CardContent></Card></div>}<Card><CardHeader><CardTitle>Purchase Orders & Transfers</CardTitle><CardDescription>Accounting ready inventory reports.</CardDescription></CardHeader><CardContent className="grid md:grid-cols-2 gap-4"><div>{pos.map(p=><div key={p.id} className="p-3 border rounded-xl text-xs mb-2"><b>{p.poNumber}</b><p>{p.status} • ${(p.totalCents/100).toFixed(0)}</p></div>)}</div><div>{transfers.map(t=><div key={t.id} className="p-3 border rounded-xl text-xs mb-2"><b>Transfer</b><p>{t.quantity} units • {t.status}</p></div>)}</div></CardContent></Card><Dialog open={modal} onOpenChange={setModal}><DialogContent><DialogHeader><DialogTitle>Create Inventory Item</DialogTitle></DialogHeader><form onSubmit={create} className="space-y-3"><select value={form.itemType} onChange={e=>setForm({...form,itemType:e.target.value})} className="h-9 rounded border w-full text-xs"><option>Medicine</option><option>Medical Supply</option></select>{["name","sku","unit","lowStockThreshold"].map(k=><div key={k}><Label>{k}</Label><Input value={(form as any)[k]} onChange={e=>setForm({...form,[k]:k==="lowStockThreshold"?Number(e.target.value):e.target.value})}/></div>)}<DialogFooter><Button variant="outline" type="button" onClick={()=>setModal(false)}>Cancel</Button><Button className="bg-teal-600">Create</Button></DialogFooter></form></DialogContent></Dialog></div>;
+  const [tenantId, setTenantId] = React.useState("al-shifa");
+  const [metrics, setMetrics] = React.useState<any>({});
+  const [stock, setStock] = React.useState<any[]>([]);
+  const [suppliers, setSuppliers] = React.useState<any[]>([]);
+  const [warehouses, setWarehouses] = React.useState<any[]>([]);
+  const [pos, setPos] = React.useState<any[]>([]);
+  const [transfers, setTransfers] = React.useState<any[]>([]);
+  const [search, setSearch] = React.useState("");
+  const [loading, setLoading] = React.useState(true);
+  const [modal, setModal] = React.useState(false);
+
+  React.useEffect(() => {
+    params.then((p) => setTenantId(p.tenantId));
+  }, [params]);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    const qs = new URLSearchParams({ search });
+    const [m, s, sup, wh, po, tr] = await Promise.all([
+      fetch(`/api/operations/${tenantId}/inventory-dashboard`).then((r) => r.json()),
+      fetch(`/api/operations/${tenantId}/stock?${qs}`).then((r) => r.json()),
+      fetch(`/api/operations/${tenantId}/suppliers`).then((r) => r.json()),
+      fetch(`/api/operations/${tenantId}/warehouses`).then((r) => r.json()),
+      fetch(`/api/operations/${tenantId}/purchase-orders`).then((r) => r.json()),
+      fetch(`/api/operations/${tenantId}/transfers`).then((r) => r.json()),
+    ]);
+    if (m.success) setMetrics(m.metrics);
+    if (s.success) setStock(s.data || []);
+    if (sup.success) setSuppliers(sup.data || []);
+    if (wh.success) setWarehouses(wh.data || []);
+    if (po.success) setPos(po.data || []);
+    if (tr.success) setTransfers(tr.data || []);
+    setLoading(false);
+  }, [tenantId, search]);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  async function create(draft: StockDraft) {
+    const res = await fetch(`/api/operations/${tenantId}/stock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(draft),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setModal(false);
+      load();
+      alert("Inventory item created with barcode and QR.");
+    }
+  }
+
+  return (
+    <PageShell>
+      <PageHeader
+        icon={Package}
+        eyebrow="Supply chain"
+        title="Inventory & stock control"
+        description="Medicines, supplies, purchase orders, suppliers, batches, barcode/QR, warehouses, transfers and expiry alerts."
+        actions={
+          <Button
+            size="sm"
+            className="h-9 gap-1.5 bg-teal-600 px-4 text-xs font-semibold shadow-sm hover:bg-teal-700"
+            onClick={() => setModal(true)}
+          >
+            <Plus className="h-4 w-4" />
+            New item
+          </Button>
+        }
+      >
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute start-3 top-2.5 h-4 w-4 text-slate-400" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search SKU or barcode..."
+            className="h-9 w-full rounded-lg border border-slate-300 bg-white py-2 ps-9 pe-3 text-xs font-medium text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+        </div>
+      </PageHeader>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Items" value={metrics.items || 0} hint="SKUs tracked" icon={Boxes} tone="teal" />
+        <StatCard label="On hand" value={metrics.stock || 0} hint="Units across warehouses" icon={Warehouse} tone="cyan" />
+        <StatCard label="Low stock" value={metrics.lowStock || 0} hint="Below reorder point" icon={AlertTriangle} tone="rose" />
+        <StatCard label="Expiring" value={metrics.expiringSoon || 0} hint="Within 30 days" icon={RefreshCw} tone="amber" />
+      </div>
+
+      {loading ? (
+        <LoadingBlock label="Loading inventory" />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <StockList stock={stock} />
+            </div>
+            <SuppliersPanel suppliers={suppliers} warehouses={warehouses} />
+          </div>
+
+          <OrdersPanel purchaseOrders={pos} transfers={transfers} />
+        </>
+      )}
+
+      <CreateItemDialog open={modal} onOpenChange={setModal} onSubmit={create} />
+    </PageShell>
+  );
 }

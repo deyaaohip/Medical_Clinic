@@ -111,14 +111,14 @@ export default function ClinicWorkingHoursVacationsPage({ params }: { params: Pr
   };
 
   return (
-    <div className="p-6 space-y-8 animate-in fade-in-0">
+    <div className="mx-auto w-full max-w-[1600px] space-y-8 px-5 py-6 sm:px-6 lg:px-8 lg:py-8 animate-in fade-in-0">
       {/* Top Multi-Branch Header Row */}
       <div className="flex flex-col gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight flex items-center space-x-2 text-slate-900 dark:text-slate-50">
-            <span>Working Hours, Shift Rules & Leave Calendars</span>
+          <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-slate-900 dark:text-slate-50">
+            Working hours, shift rules & leave calendars
           </h1>
-          <p className="mt-1 text-xs text-slate-500 font-medium max-w-lg">
+          <p className="mt-1 max-w-lg text-sm font-medium text-slate-500 dark:text-slate-400">
             Standard operating shift matrices, appointment time slot durations, and physician vacation scheduling pipelines.
           </p>
         </div>

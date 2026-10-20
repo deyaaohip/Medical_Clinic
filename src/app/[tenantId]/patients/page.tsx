@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/clinic/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -118,7 +119,14 @@ export default function MasterPatientDirectoryPage({ params }: { params: Promise
   };
 
   return (
-    <div className="p-6 space-y-8 animate-in fade-in-0">
+    <div className="mx-auto w-full max-w-[1600px] space-y-8 px-5 py-6 sm:px-6 lg:px-8 lg:py-8 animate-in fade-in-0">
+      <PageHeader
+        icon={Bed}
+        eyebrow="Patient management"
+        title="Master patient directory"
+        description="Search every record in this tenant, open a chart, or register a new patient in seconds."
+      />
+
       {/* Action Bar Row */}
       <div className="flex flex-col gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-3">

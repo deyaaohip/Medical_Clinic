@@ -1,21 +1,147 @@
 "use client";
-import * as React from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AlertTriangle, Brain, CheckCircle2, FileText, Languages, Loader2, Mic, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 
-const featureLabels=["visit_summary","medical_note_generator","soap_generator","treatment_suggestions","diagnosis_suggestions","drug_interaction_analysis","prescription_review","lab_result_interpretation","radiology_report_summary","patient_risk_prediction","follow_up_suggestions","reminder_suggestions","insurance_coding_assistance","voice_to_medical_notes","medical_document_ocr","medical_report_translation"];
+import * as React from "react";
+import { Brain, CheckCircle2, ClipboardList, Sparkles, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { PageShell } from "@/components/clinic/ui/page-shell";
+import { PageHeader } from "@/components/clinic/ui/page-header";
+import { SectionHeading } from "@/components/clinic/ui/section-heading";
+import { StatCard } from "@/components/clinic/ui/stat-card";
+import { EmptyState, LoadingBlock } from "@/components/clinic/ui/state-blocks";
+import { AiSafetyNotice } from "@/components/clinic/ai-engine/ai-safety-notice";
+import { AiFeatureGrid, AI_FEATURE_KEYS } from "@/components/clinic/ai-engine/ai-feature-grid";
+import { AiActionCard, type AiAction } from "@/components/clinic/ai-engine/ai-action-card";
+import { AiAssistDialog, type AiDraft } from "@/components/clinic/ai-engine/ai-assist-dialog";
 
 export default function AIEnginePage({ params }: { params: Promise<{ tenantId: string }> }) {
-  const [tenantId,setTenantId]=React.useState("al-shifa"); const [features,setFeatures]=React.useState<any[]>([]); const [actions,setActions]=React.useState<any[]>([]); const [patients,setPatients]=React.useState<any[]>([]); const [staff,setStaff]=React.useState<any[]>([]); const [loading,setLoading]=React.useState(true); const [modal,setModal]=React.useState(false);
-  const [form,setForm]=React.useState({featureKey:"visit_summary",patientId:"",doctorId:"",promptSummary:"Summarize current visit and suggest follow-up considerations.",confidenceScore:0.82});
-  React.useEffect(()=>{params.then(p=>setTenantId(p.tenantId));},[params]);
-  const load=React.useCallback(async()=>{setLoading(true); const [f,a,p,s]=await Promise.all([fetch(`/api/operations/${tenantId}/ai-features`).then(r=>r.json()),fetch(`/api/operations/${tenantId}/ai-actions`).then(r=>r.json()),fetch(`/api/clinic/${tenantId}/patients`).then(r=>r.json()),fetch(`/api/clinic/${tenantId}/staff?staffType=Doctor`).then(r=>r.json())]); if(f.success)setFeatures(f.data||[]); if(a.success)setActions(a.data||[]); if(p.success)setPatients(p.data||[]); if(s.success)setStaff(s.data||[]); setForm(x=>({...x,patientId:p.data?.[0]?.id||x.patientId,doctorId:s.data?.[0]?.id||x.doctorId})); setLoading(false);},[tenantId]); React.useEffect(()=>{load();},[load]);
-  async function run(e:React.FormEvent){e.preventDefault(); const res=await fetch(`/api/operations/${tenantId}/ai-actions`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)}); const d=await res.json(); if(d.success){setModal(false);load();alert("AI action logged. Doctor review required before patient visibility.");}}
-  async function approve(id:string){const res=await fetch(`/api/operations/${tenantId}/ai-actions/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"approve"})}); const d=await res.json(); if(d.success){load();alert("Doctor approved. Output can now be patient-visible if physician chooses.");}}
-  return <div className="p-6 space-y-6"><div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl p-5 flex gap-3"><ShieldAlert className="w-6 h-6"/><div><p className="font-black">Clinical Safety Rule: AI never replaces the doctor.</p><p className="text-xs font-bold">Every recommendation requires confidence score, sources, medical references, review required, doctor approval required. Patients cannot receive AI recommendations without physician approval.</p></div></div><div className="flex justify-between bg-white dark:bg-slate-900 border rounded-2xl p-6"><div><h1 className="text-2xl font-black flex gap-2"><Brain className="text-teal-600"/> Clinic AI Engine</h1><p className="text-xs text-slate-500">Summaries, SOAP generation, treatment/diagnosis suggestions, interactions, OCR, translation, voice notes, risk prediction and coding assistance.</p></div><Button onClick={()=>setModal(true)} className="bg-teal-600"><Sparkles className="w-4 h-4 mr-1"/>Run AI Assist</Button></div><div className="grid grid-cols-2 md:grid-cols-4 gap-3">{featureLabels.map(k=><Card key={k}><CardContent className="p-4"><p className="text-xs font-black capitalize">{k.replaceAll("_"," ")}</p><Badge variant="success" className="mt-2">Doctor Approval</Badge></CardContent></Card>)}</div>{loading?<Loader2 className="animate-spin"/>:<div className="space-y-4">{actions.map(a=><Card key={a.id} className="border"><CardHeader><div className="flex justify-between"><div><CardTitle className="font-black capitalize">{a.featureKey.replaceAll("_"," ")}</CardTitle><CardDescription>{a.patientName} • Dr. {a.doctorName}</CardDescription></div><Badge variant={a.status==="DoctorApproved"?"success":"warning"}>{a.status}</Badge></div></CardHeader><CardContent className="space-y-3 text-xs"><p className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">{a.outputText}</p><div className="grid md:grid-cols-4 gap-2"><Badge>Confidence {(a.confidenceScore*100).toFixed(0)}%</Badge><Badge variant="outline">Sources {a.sources?.length}</Badge><Badge variant="outline">References {a.medicalReferences?.length}</Badge><Badge variant={a.doctorApprovalRequired?"destructive":"success"}>Doctor Approval Required</Badge></div><div className="p-3 bg-rose-50 text-rose-700 rounded-xl font-bold">Review Required: {String(a.reviewRequired)} • Patient Visible: {String(a.patientVisible)} • AI action logged at {new Date(a.createdAt).toLocaleString()}</div>{a.status!=="DoctorApproved"&&<Button size="sm" className="bg-emerald-600" onClick={()=>approve(a.id)}><CheckCircle2 className="w-4 h-4 mr-1"/>Doctor Approve</Button>}</CardContent></Card>)}</div>}<Dialog open={modal} onOpenChange={setModal}><DialogContent><DialogHeader><DialogTitle>Run AI Clinical Assist</DialogTitle></DialogHeader><form onSubmit={run} className="space-y-3"><select value={form.featureKey} onChange={e=>setForm({...form,featureKey:e.target.value})} className="h-9 rounded border w-full text-xs">{featureLabels.map(f=><option key={f} value={f}>{f.replaceAll("_"," ")}</option>)}</select><select value={form.patientId} onChange={e=>setForm({...form,patientId:e.target.value})} className="h-9 rounded border w-full text-xs">{patients.map(p=><option key={p.id} value={p.id}>{p.fullName}</option>)}</select><select value={form.doctorId} onChange={e=>setForm({...form,doctorId:e.target.value})} className="h-9 rounded border w-full text-xs">{staff.map(s=><option key={s.id} value={s.id}>{s.user?.fullName}</option>)}</select><textarea value={form.promptSummary} onChange={e=>setForm({...form,promptSummary:e.target.value})} rows={4} className="w-full rounded border p-3 text-xs dark:bg-slate-900"/><div className="p-3 bg-amber-50 text-amber-800 rounded-xl text-xs font-bold">Output will be logged and blocked from patient view until physician approval.</div><DialogFooter><Button variant="outline" type="button" onClick={()=>setModal(false)}>Cancel</Button><Button className="bg-teal-600" type="submit"><Brain className="w-4 h-4 mr-1"/>Generate Draft</Button></DialogFooter></form></DialogContent></Dialog></div>;
+  const [tenantId, setTenantId] = React.useState("al-shifa");
+  const [actions, setActions] = React.useState<AiAction[]>([]);
+  const [patients, setPatients] = React.useState<any[]>([]);
+  const [staff, setStaff] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [modal, setModal] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+
+  React.useEffect(() => {
+    params.then((p) => setTenantId(p.tenantId));
+  }, [params]);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    const [f, a, p, s] = await Promise.all([
+      fetch(`/api/operations/${tenantId}/ai-features`).then((r) => r.json()),
+      fetch(`/api/operations/${tenantId}/ai-actions`).then((r) => r.json()),
+      fetch(`/api/clinic/${tenantId}/patients`).then((r) => r.json()),
+      fetch(`/api/clinic/${tenantId}/staff?staffType=Doctor`).then((r) => r.json()),
+    ]);
+    if (a.success) setActions(a.data || []);
+    if (p.success) setPatients(p.data || []);
+    if (s.success) setStaff(s.data || []);
+    setLoading(false);
+  }, [tenantId]);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  async function run(draft: AiDraft) {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/operations/${tenantId}/ai-actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setModal(false);
+        load();
+        alert("AI action logged. Doctor review required before patient visibility.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function approve(id: string) {
+    const res = await fetch(`/api/operations/${tenantId}/ai-actions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      load();
+      alert("Doctor approved. Output can now be patient-visible if physician chooses.");
+    }
+  }
+
+  const pending = actions.filter((action) => action.status !== "DoctorApproved").length;
+  const approved = actions.length - pending;
+
+  return (
+    <PageShell>
+      <PageHeader
+        icon={Brain}
+        eyebrow="Clinical intelligence"
+        title="Clinic AI engine"
+        description="Visit summaries, SOAP generation, treatment suggestions, interaction checks, OCR, translation, voice notes and coding assistance."
+        actions={
+          <Button
+            size="sm"
+            className="h-9 gap-1.5 bg-teal-600 px-4 text-xs font-semibold shadow-sm hover:bg-teal-700"
+            onClick={() => setModal(true)}
+          >
+            <Sparkles className="h-4 w-4" />
+            Run AI assist
+          </Button>
+        }
+      />
+
+      <AiSafetyNotice />
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Logged actions" value={actions.length} hint="All capabilities" icon={ClipboardList} tone="teal" />
+        <StatCard label="Pending review" value={pending} hint="Awaiting a physician" icon={ShieldCheck} tone="amber" />
+        <StatCard label="Approved" value={approved} hint="Signed off" icon={CheckCircle2} tone="emerald" />
+        <StatCard label="Capabilities" value={AI_FEATURE_KEYS.length} hint="Assistive workflows" icon={Brain} tone="cyan" />
+      </div>
+
+      <AiFeatureGrid />
+
+      <section className="space-y-4">
+        <SectionHeading
+          title="Review queue"
+          count={actions.length}
+          description="Physician approval is required before any output becomes patient-visible."
+        />
+
+        {loading ? (
+          <LoadingBlock label="Loading AI actions" />
+        ) : actions.length === 0 ? (
+          <EmptyState
+            icon={Brain}
+            title="No AI actions logged yet"
+            description="Run an assist to draft a summary, SOAP note or follow-up suggestion for physician review."
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {actions.map((action) => (
+              <AiActionCard key={action.id} action={action} onApprove={() => approve(action.id)} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <AiAssistDialog
+        open={modal}
+        onOpenChange={setModal}
+        features={AI_FEATURE_KEYS}
+        patients={patients}
+        staff={staff}
+        submitting={submitting}
+        onSubmit={run}
+      />
+    </PageShell>
+  );
 }

@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/clinic/ui/page-header";
+import { StatCard } from "@/components/clinic/ui/stat-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -187,26 +189,29 @@ export default function ElectronicMedicalRecordPage({ params }: { params: Promis
   const diagnosisCount = encounters.reduce((sum, item) => sum + (item.diagnoses?.length || 0), 0);
 
   return (
-    <div className="space-y-6 p-6 print:p-0">
-      <section className="rounded-3xl bg-gradient-to-r from-slate-950 via-teal-950 to-slate-900 p-7 text-white shadow-xl print:hidden">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <Badge className="mb-3 bg-teal-400/15 text-teal-200">Encrypted clinical workspace</Badge>
-            <h1 className="flex items-center gap-3 text-3xl font-black"><FileHeart className="h-8 w-8 text-teal-300" /> Electronic Medical Record</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-300">SOAP documentation, ICD‑10 diagnoses, physical examination, signatures, voice notes, attachments and immutable audit history.</p>
-          </div>
-          <Button onClick={() => setCreateOpen(true)} className="h-11 bg-teal-500 px-6 font-black text-slate-950 hover:bg-teal-400"><Plus className="mr-2 h-4 w-4" />New SOAP encounter</Button>
-        </div>
-      </section>
+    <div className="mx-auto w-full max-w-[1600px] space-y-8 px-5 py-6 sm:px-6 lg:px-8 lg:py-8 print:p-0">
+      <PageHeader
+        className="print:hidden"
+        icon={FileHeart}
+        eyebrow="Encrypted clinical workspace"
+        title="Electronic medical record"
+        description="SOAP documentation, ICD-10 diagnoses, physical examination, signatures, voice notes, attachments and immutable audit history."
+        actions={
+          <Button
+            onClick={() => setCreateOpen(true)}
+            size="sm"
+            className="h-9 gap-1.5 bg-teal-600 px-4 text-xs font-semibold shadow-sm hover:bg-teal-700"
+          >
+            <Plus className="h-4 w-4" />
+            New SOAP encounter
+          </Button>
+        }
+      />
 
-      <div className="grid gap-4 sm:grid-cols-3 print:hidden">
-        {[
-          ["Visit history", encounters.length, FileText, "text-teal-600"],
-          ["Doctor signed", signedCount, ShieldCheck, "text-emerald-600"],
-          ["ICD‑10 diagnoses", diagnosisCount, Stethoscope, "text-cyan-600"],
-        ].map(([label, value, Icon, color]: any) => (
-          <Card key={label}><CardContent className="flex items-center justify-between p-5"><div><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 text-3xl font-black">{value}</p></div><Icon className={`h-8 w-8 ${color}`} /></CardContent></Card>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 print:hidden">
+        <StatCard label="Visit history" value={encounters.length} hint="Documented encounters" icon={FileText} tone="teal" />
+        <StatCard label="Doctor signed" value={signedCount} hint="Signed off" icon={ShieldCheck} tone="emerald" />
+        <StatCard label="ICD-10 diagnoses" value={diagnosisCount} hint="Codes in use" icon={Stethoscope} tone="cyan" />
       </div>
 
       <div className="flex flex-col gap-3 rounded-2xl border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between print:hidden">

@@ -139,7 +139,7 @@ export default function DuplicatePatientsMergeUtilityPage({ params }: { params: 
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8 animate-in fade-in-0">
+    <div className="mx-auto max-w-4xl space-y-8 px-5 py-6 sm:px-6 lg:py-8 animate-in fade-in-0">
       <div className="flex items-center justify-between">
         <Button
           variant="outline"
